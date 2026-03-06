@@ -118,7 +118,9 @@ def record_run_async(db_path: Path, total: int, passed: int, blocked: int,
         except Exception as exc:
             print(f"[ETS] DB write error: {exc}", file=sys.stderr)
 
-    t = threading.Thread(target=_write, daemon=True)
+    # Non-daemon: Python joins all non-daemon threads on process exit,
+    # so the write completes even for tiny batches — no sleep hack needed.
+    t = threading.Thread(target=_write, daemon=False)
     t.start()
 
 
@@ -262,13 +264,13 @@ class RuleEngine:
             sender_searchable = f"{parsed_addr} {from_name.lower()}"
 
         except Exception:
-            # Malformed — return uncertain
+            # Malformed — return uncertain as tuple (fixes bare-dict unpack crash)
             result = dict(email_obj)
             result["score"] = 0
             result["decision"] = "uncertain"
             if explain:
                 result["matched_rules"] = []
-            return result
+            return result, []
 
         net_score = 0
         matched: list[str] = []
@@ -501,9 +503,10 @@ def main():
 
     result = engine.filter_batch(emails, explain=args.explain)
 
-    # Small delay to let async DB write thread finish if we have a tiny batch
-    if len(emails) < 10:
-        time.sleep(0.05)
+    # The async DB thread is daemon=True; for tiny batches the process may exit
+    # before the thread finishes. Explicit join is not available here because
+    # record_run_async returns None. The sleep was a hack; Python version keeps
+    # it minimal. The Rust binary eliminates this entirely via thread::join().
 
     print(json.dumps(result))
 

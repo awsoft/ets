@@ -1,6 +1,10 @@
 /**
  * ETS — Email Token Saver
- * OpenClaw plugin: wraps email_filter.py as agent tools + slash commands.
+ * OpenClaw plugin: wraps the Rust `ets` binary (or Python scripts as fallback).
+ *
+ * Binary preference:
+ *   1. bin/ets  (Rust — fast, single-process pipeline)
+ *   2. email_filter.py / email_extractor.py  (Python fallback)
  */
 
 import { spawnSync } from "child_process";
@@ -12,10 +16,8 @@ import * as path from "path";
 // Paths
 // ---------------------------------------------------------------------------
 
-// jiti sets __filename; fall back to import.meta when available
 const PLUGIN_DIR: string = (() => {
   try {
-    // jiti context
     if (typeof __filename !== "undefined") {
       return path.dirname(__filename);
     }
@@ -26,16 +28,133 @@ const PLUGIN_DIR: string = (() => {
   return path.join(os.homedir(), ".openclaw", "extensions", "ets");
 })();
 
-const DEFAULT_RULES_PATH = path.join(PLUGIN_DIR, "email_rules.json");
-const DEFAULT_DB_PATH = path.join(os.homedir(), ".openclaw", "ets", "ets.db");
+const BINARY_PATH = path.join(PLUGIN_DIR, "bin", "ets");
 const FILTER_SCRIPT = path.join(PLUGIN_DIR, "email_filter.py");
 const EXTRACTOR_SCRIPT = path.join(PLUGIN_DIR, "email_extractor.py");
 
-const PLUGIN_VERSION = "1.1.0";
+const DEFAULT_RULES_PATH = path.join(PLUGIN_DIR, "email_rules.json");
+const DEFAULT_DB_PATH = path.join(os.homedir(), ".openclaw", "ets", "ets.db");
 const DEFAULT_TEMPLATES_PATH = path.join(PLUGIN_DIR, "extractor_templates.json");
 
+const PLUGIN_VERSION = "1.2.0";
+
 // ---------------------------------------------------------------------------
-// Helpers
+// Binary check
+// ---------------------------------------------------------------------------
+
+function hasBinary(): boolean {
+  try {
+    fs.accessSync(BINARY_PATH, fs.constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Unified spawn helper (#7 — single function, no duplicate runFilter/runExtractor)
+// ---------------------------------------------------------------------------
+
+interface SpawnResult {
+  stdout: string;
+  stderr: string;
+  status: number | null;
+}
+
+/**
+ * Run an ETS operation. Uses the Rust binary when available; falls back to Python.
+ *
+ * @param args  Subcommand + flags. First element is the subcommand:
+ *              "filter" | "extract" | "pipeline" | "stats" | "sync-rules"
+ *              When falling back to Python, "filter"→email_filter.py,
+ *              "extract"→email_extractor.py.
+ * @param input Optional stdin payload (JSON string).
+ * @param env   Extra environment variables.
+ */
+function runEts(
+  args: string[],
+  input?: string,
+  env?: NodeJS.ProcessEnv
+): SpawnResult {
+  const mergedEnv = { ...process.env, ...env };
+
+  if (hasBinary()) {
+    // Rust binary — subcommand is first arg, global flags prepended
+    const result = spawnSync(
+      BINARY_PATH,
+      ["--rules", rulesPathResolved, "--db", dbPathResolved, ...args],
+      { input, encoding: "utf8", env: mergedEnv, maxBuffer: 50 * 1024 * 1024 }
+    );
+    return {
+      stdout: result.stdout ?? "",
+      stderr: result.stderr ?? "",
+      status: result.status,
+    };
+  }
+
+  // Python fallback — map subcommand to script + translate flags
+  const [subcmd, ...rest] = args;
+  if (subcmd === "stats") {
+    const result = spawnSync(
+      "python3",
+      [FILTER_SCRIPT, "--stats", "--rules", rulesPathResolved, "--db", dbPathResolved],
+      { encoding: "utf8", env: mergedEnv, maxBuffer: 50 * 1024 * 1024 }
+    );
+    return { stdout: result.stdout ?? "", stderr: result.stderr ?? "", status: result.status };
+  }
+  if (subcmd === "sync-rules") {
+    const result = spawnSync(
+      "python3",
+      [FILTER_SCRIPT, "--sync-rules", "--rules", rulesPathResolved, "--db", dbPathResolved],
+      { encoding: "utf8", env: mergedEnv, maxBuffer: 50 * 1024 * 1024 }
+    );
+    return { stdout: result.stdout ?? "", stderr: result.stderr ?? "", status: result.status };
+  }
+  if (subcmd === "filter") {
+    const result = spawnSync(
+      "python3",
+      [FILTER_SCRIPT, "--rules", rulesPathResolved, "--db", dbPathResolved, ...rest],
+      { input, encoding: "utf8", env: mergedEnv, maxBuffer: 50 * 1024 * 1024 }
+    );
+    return { stdout: result.stdout ?? "", stderr: result.stderr ?? "", status: result.status };
+  }
+  if (subcmd === "extract") {
+    // Python extractor reads from stdin (no temp file — #4)
+    const result = spawnSync(
+      "python3",
+      [EXTRACTOR_SCRIPT, ...rest],
+      { input, encoding: "utf8", env: mergedEnv, maxBuffer: 50 * 1024 * 1024 }
+    );
+    return { stdout: result.stdout ?? "", stderr: result.stderr ?? "", status: result.status };
+  }
+  if (subcmd === "pipeline") {
+    // Python has no pipeline subcommand — run filter then extract sequentially
+    const filterResult = spawnSync(
+      "python3",
+      [FILTER_SCRIPT, "--rules", rulesPathResolved, "--db", dbPathResolved,
+       ...rest.filter(a => a === "--explain")],
+      { input, encoding: "utf8", env: mergedEnv, maxBuffer: 50 * 1024 * 1024 }
+    );
+    if ((filterResult.status ?? 1) !== 0) {
+      return { stdout: "", stderr: filterResult.stderr ?? "", status: filterResult.status };
+    }
+    const extractResult = spawnSync(
+      "python3",
+      [EXTRACTOR_SCRIPT, ...rest],
+      { input: filterResult.stdout, encoding: "utf8", env: mergedEnv, maxBuffer: 50 * 1024 * 1024 }
+    );
+    return {
+      stdout: extractResult.stdout ?? "",
+      stderr: extractResult.stderr ?? "",
+      status: extractResult.status,
+    };
+  }
+
+  return { stdout: "", stderr: `Unknown subcommand: ${subcmd}`, status: 1 };
+}
+
+// ---------------------------------------------------------------------------
+// Types
 // ---------------------------------------------------------------------------
 
 interface FilterResult {
@@ -59,7 +178,7 @@ interface ExtractedEmail {
   extracted?: Record<string, unknown>;
   snippet: string;
   source_bucket: string;
-  extraction_methods?: Record<string, string>;
+  matched_template?: string | null;
 }
 
 interface EmailObj {
@@ -74,55 +193,12 @@ interface EmailObj {
   [key: string]: unknown;
 }
 
-function runFilter(
-  args: string[],
-  input?: string,
-  env?: NodeJS.ProcessEnv
-): { stdout: string; stderr: string; status: number | null } {
-  const result = spawnSync("python3", [FILTER_SCRIPT, ...args], {
-    input: input,
-    encoding: "utf8",
-    env: { ...process.env, ...env },
-    maxBuffer: 50 * 1024 * 1024, // 50 MB
-  });
-
-  return {
-    stdout: result.stdout ?? "",
-    stderr: result.stderr ?? "",
-    status: result.status,
-  };
-}
-
-function runExtractor(
-  args: string[],
-  input?: string,
-  env?: NodeJS.ProcessEnv
-): { stdout: string; stderr: string; status: number | null } {
-  const result = spawnSync("python3", [EXTRACTOR_SCRIPT, ...args], {
-    input: input,
-    encoding: "utf8",
-    env: { ...process.env, ...env },
-    maxBuffer: 50 * 1024 * 1024, // 50 MB
-  });
-
-  return {
-    stdout: result.stdout ?? "",
-    stderr: result.stderr ?? "",
-    status: result.status,
-  };
-}
-
-function parseFilterOutput(stdout: string): FilterResult {
-  try {
-    return JSON.parse(stdout) as FilterResult;
-  } catch (e) {
-    throw new Error(`Failed to parse filter output: ${(e as Error).message}\nRaw: ${stdout.slice(0, 500)}`);
-  }
-}
-
-function loadRules(rulesPath: string): { version: number; rules: Rule[] } {
-  const raw = fs.readFileSync(rulesPath, "utf8");
-  return JSON.parse(raw);
+interface Rule {
+  id: string;
+  action: "allow" | "block";
+  weight: number;
+  match: Record<string, string>;
+  reason: string;
 }
 
 interface ExtractorTemplate {
@@ -139,48 +215,48 @@ interface TemplatesFile {
   templates: ExtractorTemplate[];
 }
 
-function loadTemplates(templatesPath: string): TemplatesFile {
-  const raw = fs.readFileSync(templatesPath, "utf8");
+// ---------------------------------------------------------------------------
+// File helpers
+// ---------------------------------------------------------------------------
+
+function loadRules(rulesPath: string): { version: number; rules: Rule[]; _meta?: Record<string, unknown> } {
+  const raw = fs.readFileSync(rulesPath, "utf8");
   return JSON.parse(raw);
 }
 
-interface Rule {
-  id: string;
-  action: "allow" | "block";
-  weight: number;
-  match: Record<string, string>;
-  reason: string;
+function loadTemplates(templatesPath: string): TemplatesFile {
+  const raw = fs.readFileSync(templatesPath, "utf8");
+  return JSON.parse(raw);
 }
 
 // ---------------------------------------------------------------------------
 // Plugin registration
 // ---------------------------------------------------------------------------
 
+// These are set during register() and used by runEts() above.
+// Declared at module scope so runEts (defined above) can reference them.
+let rulesPathResolved: string = DEFAULT_RULES_PATH;
+let dbPathResolved: string = DEFAULT_DB_PATH;
+
 export default function register(api: any): void {
-  // Resolve config with defaults
   const cfg: Record<string, any> =
     api.config?.plugins?.entries?.ets?.config ?? {};
-  const rulesPath: string = cfg.rulesPath
-    ? String(cfg.rulesPath).replace("~", os.homedir())
+
+  // Proper ~ expansion anchored at start of string (#6)
+  rulesPathResolved = cfg.rulesPath
+    ? path.resolve(String(cfg.rulesPath).replace(/^~/, os.homedir()))
     : DEFAULT_RULES_PATH;
-  const dbPath: string = cfg.dbPath
-    ? String(cfg.dbPath).replace("~", os.homedir())
+  dbPathResolved = cfg.dbPath
+    ? path.resolve(String(cfg.dbPath).replace(/^~/, os.homedir()))
     : DEFAULT_DB_PATH;
+  const templatesPath: string = cfg.templatesPath
+    ? path.resolve(String(cfg.templatesPath).replace(/^~/, os.homedir()))
+    : DEFAULT_TEMPLATES_PATH;
 
   const thresholdBlock: number = cfg.blockThreshold ?? -50;
   const thresholdAllow: number = cfg.allowThreshold ?? 50;
 
-  const baseEnv = {
-    ETS_RULES_PATH: rulesPath,
-    ETS_DB_PATH: dbPath,
-  };
-
-  const baseArgs = [
-    "--rules", rulesPath,
-    "--db", dbPath,
-    "--threshold-block", String(thresholdBlock),
-    "--threshold-allow", String(thresholdAllow),
-  ];
+  const binaryAvailable = hasBinary();
 
   // -------------------------------------------------------------------------
   // Tool: ets_filter
@@ -224,23 +300,101 @@ export default function register(api: any): void {
       const { emails, explain = false } = params;
 
       if (!Array.isArray(emails) || emails.length === 0) {
-        return { passed: [], blocked: [], uncertain: [], stats: { total: 0, passed: 0, blocked: 0, uncertain: 0, rules_loaded: 0, elapsed_ms: 0 } };
+        return {
+          passed: [], blocked: [], uncertain: [],
+          stats: { total: 0, passed: 0, blocked: 0, uncertain: 0, rules_loaded: 0, elapsed_ms: 0 },
+        };
       }
 
-      const args = [...baseArgs];
-      if (explain) args.push("--explain");
+      const args = [
+        "filter",
+        "--threshold-block", String(thresholdBlock),
+        "--threshold-allow", String(thresholdAllow),
+        ...(explain ? ["--explain"] : []),
+      ];
 
-      const { stdout, stderr, status } = runFilter(
-        args,
-        JSON.stringify(emails),
-        baseEnv
-      );
+      const { stdout, stderr, status } = runEts(args, JSON.stringify(emails));
 
       if (status !== 0) {
         throw new Error(`ETS filter failed (exit ${status}): ${stderr.slice(0, 500)}`);
       }
 
-      return parseFilterOutput(stdout);
+      try {
+        return JSON.parse(stdout) as FilterResult;
+      } catch (e) {
+        throw new Error(
+          `Failed to parse filter output: ${(e as Error).message}\nRaw: ${stdout.slice(0, 500)}`
+        );
+      }
+    },
+  });
+
+  // -------------------------------------------------------------------------
+  // Tool: ets_extract
+  // -------------------------------------------------------------------------
+  api.registerTool({
+    name: "ets_extract",
+    description:
+      "Run pre-LLM email extraction on filter output. Classifies emails by type and extracts key fields. " +
+      "Pass the output of ets_filter as input. Returns compact structured summaries — no LLM involved. " +
+      "When the Rust binary is available, extraction runs in the same process as filtering (no overhead).",
+    parameters: {
+      type: "object",
+      properties: {
+        filterOutput: {
+          type: "object",
+          description:
+            "The full output object from ets_filter (contains passed, blocked, uncertain, stats).",
+        },
+        snippetCap: {
+          type: "number",
+          description: "Max chars for snippet fallback (default: 300). Financial alerts always get full snippet.",
+          default: 300,
+        },
+        explain: {
+          type: "boolean",
+          description: "If true, include extraction debug fields in each email.",
+          default: false,
+        },
+      },
+      required: ["filterOutput"],
+    },
+    handler: async (params: {
+      filterOutput: FilterResult;
+      snippetCap?: number;
+      explain?: boolean;
+    }) => {
+      const { filterOutput, snippetCap = 300, explain = false } = params;
+
+      if (!filterOutput || typeof filterOutput !== "object") {
+        throw new Error("filterOutput must be the object returned by ets_filter");
+      }
+
+      // Rust binary: read filter output from stdin — no temp file (#4)
+      // Python fallback: also reads from stdin (extractor.py supports stdin)
+      const args = [
+        "extract",
+        "--snippet-cap", String(snippetCap),
+        ...(explain ? ["--explain"] : []),
+      ];
+
+      const { stdout, stderr, status } = runEts(
+        args,
+        JSON.stringify(filterOutput), // piped to stdin, not written to disk
+        { ETS_SNIPPET_CAP: String(snippetCap) }
+      );
+
+      if (status !== 0) {
+        throw new Error(`ETS extractor failed (exit ${status}): ${stderr.slice(0, 500)}`);
+      }
+
+      try {
+        return JSON.parse(stdout) as ExtractResult;
+      } catch (e) {
+        throw new Error(
+          `Failed to parse extractor output: ${(e as Error).message}\nRaw: ${stdout.slice(0, 500)}`
+        );
+      }
     },
   });
 
@@ -266,7 +420,8 @@ export default function register(api: any): void {
         },
         weight: {
           type: "number",
-          description: "Rule weight 1-100. Higher = stronger signal. Weights >= 90 on allow rules act as hard overrides.",
+          description:
+            "Rule weight 1-100. Higher = stronger signal. Weights >= 90 on allow rules act as hard overrides.",
           minimum: 1,
           maximum: 100,
         },
@@ -293,7 +448,6 @@ export default function register(api: any): void {
     }) => {
       const { id, action, weight, match, reason } = params;
 
-      // Validate
       if (!/^[a-z0-9][a-z0-9-]*$/.test(id)) {
         throw new Error("Rule ID must be kebab-case (lowercase letters, numbers, hyphens)");
       }
@@ -307,15 +461,16 @@ export default function register(api: any): void {
         throw new Error("Match criteria must have at least one key");
       }
 
-      const validMatchKeys = ["sender_domain", "sender_contains", "sender_exact", "subject_regex", "body_regex"];
+      const validMatchKeys = [
+        "sender_domain", "sender_contains", "sender_exact", "subject_regex", "body_regex",
+      ];
       for (const key of Object.keys(match)) {
         if (!validMatchKeys.includes(key)) {
           throw new Error(`Invalid match key: ${key}. Valid keys: ${validMatchKeys.join(", ")}`);
         }
       }
 
-      // Load, check for duplicate, append, save
-      const data = loadRules(rulesPath);
+      const data = loadRules(rulesPathResolved);
 
       if (data.rules.some((r: Rule) => r.id === id)) {
         throw new Error(`Rule with ID '${id}' already exists. Use a different ID.`);
@@ -323,15 +478,10 @@ export default function register(api: any): void {
 
       const newRule: Rule = { id, action, weight, match, reason };
       data.rules.push(newRule);
+      fs.writeFileSync(rulesPathResolved, JSON.stringify(data, null, 2), "utf8");
 
-      fs.writeFileSync(rulesPath, JSON.stringify(data, null, 2), "utf8");
-
-      // Sync to DB
-      const { status, stderr } = runFilter(
-        ["--sync-rules", "--rules", rulesPath, "--db", dbPath],
-        undefined,
-        baseEnv
-      );
+      // Sync to DB using unified runEts (#9)
+      const { status, stderr } = runEts(["sync-rules"]);
       if (status !== 0) {
         console.error(`[ETS] sync-rules warning: ${stderr}`);
       }
@@ -359,7 +509,7 @@ export default function register(api: any): void {
     },
     handler: async (params: { action_filter?: string }) => {
       const { action_filter = "all" } = params;
-      const data = loadRules(rulesPath);
+      const data = loadRules(rulesPathResolved);
       const rules =
         action_filter === "all"
           ? data.rules
@@ -369,7 +519,7 @@ export default function register(api: any): void {
   });
 
   // -------------------------------------------------------------------------
-  // Tool: ets_stats
+  // Tool: ets_stats (#9 — uses runEts(["stats"]) not a raw Python subprocess)
   // -------------------------------------------------------------------------
   api.registerTool({
     name: "ets_stats",
@@ -380,88 +530,14 @@ export default function register(api: any): void {
       properties: {},
     },
     handler: async (_params: Record<string, never>) => {
-      const { stdout, stderr, status } = runFilter(
-        ["--stats", "--rules", rulesPath, "--db", dbPath],
-        undefined,
-        baseEnv
-      );
+      const { stdout, stderr, status } = runEts(["stats"]);
       if (status !== 0) {
         throw new Error(`ETS stats failed (exit ${status}): ${stderr.slice(0, 500)}`);
       }
       try {
         return JSON.parse(stdout);
-      } catch (e) {
+      } catch {
         throw new Error(`Failed to parse stats output: ${stdout.slice(0, 200)}`);
-      }
-    },
-  });
-
-  // -------------------------------------------------------------------------
-  // Tool: ets_extract
-  // -------------------------------------------------------------------------
-  api.registerTool({
-    name: "ets_extract",
-    description:
-      "Run pre-LLM email extraction on filter output. Classifies emails by type and extracts key fields. " +
-      "Pass the output of ets_filter as input. Returns compact structured summaries — no LLM involved.",
-    parameters: {
-      type: "object",
-      properties: {
-        filterOutput: {
-          type: "object",
-          description:
-            "The full output object from ets_filter (contains passed, blocked, uncertain, stats).",
-        },
-        snippetCap: {
-          type: "number",
-          description: "Max chars for snippet fallback (default: 300). Financial alerts always get full snippet.",
-          default: 300,
-        },
-        explain: {
-          type: "boolean",
-          description: "If true, include extraction_methods debug field in each email.",
-          default: false,
-        },
-      },
-      required: ["filterOutput"],
-    },
-    handler: async (params: {
-      filterOutput: FilterResult;
-      snippetCap?: number;
-      explain?: boolean;
-    }) => {
-      const { filterOutput, snippetCap = 300, explain = false } = params;
-
-      if (!filterOutput || typeof filterOutput !== "object") {
-        throw new Error("filterOutput must be the object returned by ets_filter");
-      }
-
-      // Write filterOutput to a temp file
-      const tmpFile = path.join(os.tmpdir(), `ets_filter_out_${Date.now()}.json`);
-      try {
-        fs.writeFileSync(tmpFile, JSON.stringify(filterOutput), "utf8");
-
-        const args: string[] = [
-          "--input", tmpFile,
-          "--snippet-cap", String(snippetCap),
-        ];
-        if (explain) args.push("--explain");
-
-        const { stdout, stderr, status } = runExtractor(args, undefined, {
-          ETS_SNIPPET_CAP: String(snippetCap),
-        });
-
-        if (status !== 0) {
-          throw new Error(`ETS extractor failed (exit ${status}): ${stderr.slice(0, 500)}`);
-        }
-
-        try {
-          return JSON.parse(stdout) as ExtractResult;
-        } catch (e) {
-          throw new Error(`Failed to parse extractor output: ${(e as Error).message}\nRaw: ${stdout.slice(0, 500)}`);
-        }
-      } finally {
-        try { fs.unlinkSync(tmpFile); } catch (_) {}
       }
     },
   });
@@ -497,51 +573,39 @@ export default function register(api: any): void {
     },
     handler: async (params: { template: ExtractorTemplate; validate?: boolean }) => {
       const { template, validate = true } = params;
-      const templatesPath = DEFAULT_TEMPLATES_PATH;
 
       if (validate) {
-        // Required top-level fields
         for (const field of ["id", "name", "priority", "type", "detect", "extract"]) {
           if (!(field in template)) {
             throw new Error(`Missing required field: ${field}`);
           }
         }
-
-        // id must be snake_case
         if (!/^[a-z0-9][a-z0-9\-_]*$/.test(template.id)) {
-          throw new Error("Template id must be snake_case or kebab-case (lowercase letters, numbers, hyphens, underscores)");
+          throw new Error("Template id must be snake_case or kebab-case");
         }
-
-        // Valid types
-        const validTypes = ["shipping", "order_confirm", "billing", "job", "financial_alert",
-          "calendar_invite", "subscription", "travel", "school_notice", "unclassified"];
+        const validTypes = [
+          "shipping", "order_confirm", "billing", "job", "financial_alert",
+          "calendar_invite", "subscription", "travel", "school_notice", "unclassified",
+        ];
         if (!validTypes.includes(template.type)) {
           throw new Error(`Invalid type '${template.type}'. Valid types: ${validTypes.join(", ")}`);
         }
-
-        // detect must have at least one rule
         const detectKeys = ["sender_domain", "sender_contains", "subject_regex", "snippet_regex"];
         const hasDetect = detectKeys.some(k => k in (template.detect || {}));
         if (!hasDetect) {
           throw new Error(`detect must have at least one rule: ${detectKeys.join(", ")}`);
         }
-
-        // extract must have at least one field
         if (!template.extract || Object.keys(template.extract).length === 0) {
           throw new Error("extract must have at least one field");
         }
-
-        // priority must be a positive integer
         if (typeof template.priority !== "number" || template.priority < 1) {
           throw new Error("priority must be a positive integer");
         }
       }
 
       const data = loadTemplates(templatesPath);
-
-      // Check for duplicate id
       if (data.templates.some((t: ExtractorTemplate) => t.id === template.id)) {
-        throw new Error(`Template with id '${template.id}' already exists. Use a different id.`);
+        throw new Error(`Template with id '${template.id}' already exists.`);
       }
 
       data.templates.push(template);
@@ -551,7 +615,7 @@ export default function register(api: any): void {
         success: true,
         template_id: template.id,
         total_templates: data.templates.length,
-        message: `Template '${template.id}' added successfully. ETS will use it on the next extraction run.`,
+        message: `Template '${template.id}' added successfully.`,
       };
     },
   });
@@ -563,66 +627,71 @@ export default function register(api: any): void {
     name: "ets",
     acceptsArgs: true,
     description: "ETS Email Token Saver — /ets stats | /ets rules | /ets version | /ets pipeline",
-    handler: async (context: any, args: string) => {
+    handler: async (_context: any, args: string) => {
       const sub = (args ?? "").trim().toLowerCase();
 
+      // Load rules once at the top — not per-branch (#8)
+      let rulesData: { rules: Rule[]; _meta?: Record<string, unknown> } = { rules: [] };
+      try {
+        rulesData = loadRules(rulesPathResolved);
+      } catch {
+        return `❌ Cannot read rules file: \`${rulesPathResolved}\``;
+      }
+
       if (sub === "pipeline") {
-        const data = loadRules(rulesPath) as any;
-        const meta = data._meta ?? {};
-        const snippetCap: number = meta.snippet_cap ?? 300;
-        const pipeline: string[] = meta.pipeline ?? ["filter", "extract"];
+        const meta = (rulesData._meta ?? {}) as Record<string, unknown>;
+        const snippetCap: number = (meta.snippet_cap as number) ?? 300;
+        const pipeline: string[] = (meta.pipeline as string[]) ?? ["filter", "extract"];
         const pipelineStr = pipeline.map((s: string, i: number) => `${i + 1}. **${s}**`).join(" → ");
-        const rulesData = data.rules ?? [];
-        const allowCount = rulesData.filter((r: Rule) => r.action === "allow").length;
-        const blockCount = rulesData.filter((r: Rule) => r.action === "block").length;
+        const allowCount = rulesData.rules.filter((r: Rule) => r.action === "allow").length;
+        const blockCount = rulesData.rules.filter((r: Rule) => r.action === "block").length;
 
         let templateCount = 0;
         try {
-          const tmplData = loadTemplates(DEFAULT_TEMPLATES_PATH);
+          const tmplData = loadTemplates(templatesPath);
           templateCount = tmplData.templates.length;
         } catch (_) {}
 
         return [
           `**ETS Pipeline Config** (v${PLUGIN_VERSION})`,
           ``,
+          `**Engine:** ${binaryAvailable ? "🦀 Rust binary" : "🐍 Python fallback"}`,
           `**Pipeline stages:** ${pipelineStr}`,
-          `**Filter rules:** ${rulesData.length} total (${allowCount} allow, ${blockCount} block)`,
+          `**Filter rules:** ${rulesData.rules.length} total (${allowCount} allow, ${blockCount} block)`,
           `**Extractor templates:** ${templateCount} loaded`,
           `**Snippet cap:** ${snippetCap} chars (financial alerts: unlimited)`,
           `**Thresholds:** block ≤ ${thresholdBlock}, allow ≥ ${thresholdAllow}`,
           ``,
-          `**Rules path:** \`${rulesPath}\``,
-          `**Templates path:** \`${DEFAULT_TEMPLATES_PATH}\``,
-          `**DB path:** \`${dbPath}\``,
-          `**Filter script:** \`${FILTER_SCRIPT}\``,
-          `**Extractor script:** \`${EXTRACTOR_SCRIPT}\``,
+          `**Rules path:** \`${rulesPathResolved}\``,
+          `**Templates path:** \`${templatesPath}\``,
+          `**DB path:** \`${dbPathResolved}\``,
+          `**Binary path:** \`${BINARY_PATH}\``,
         ].join("\n");
       }
 
       if (sub === "version") {
-        const data = loadRules(rulesPath);
         let templateCount = 0;
         try {
-          const tmplData = loadTemplates(DEFAULT_TEMPLATES_PATH);
+          const tmplData = loadTemplates(templatesPath);
           templateCount = tmplData.templates.length;
         } catch (_) {}
-        return `**ETS — Email Token Saver** v${PLUGIN_VERSION}\n` +
-               `Filter rules: ${data.rules.length}\n` +
-               `Extractor templates: ${templateCount}\n` +
-               `Rules path: \`${rulesPath}\`\n` +
-               `DB path: \`${dbPath}\``;
+        return (
+          `**ETS — Email Token Saver** v${PLUGIN_VERSION}\n` +
+          `Engine: ${binaryAvailable ? "🦀 Rust binary" : "🐍 Python fallback"}\n` +
+          `Filter rules: ${rulesData.rules.length}\n` +
+          `Extractor templates: ${templateCount}\n` +
+          `Rules path: \`${rulesPathResolved}\`\n` +
+          `DB path: \`${dbPathResolved}\``
+        );
       }
 
       if (sub === "rules") {
-        const data = loadRules(rulesPath);
-        const allowRules = data.rules.filter((r: Rule) => r.action === "allow");
-        const blockRules = data.rules.filter((r: Rule) => r.action === "block");
-
-        const fmt = (r: Rule) =>
-          `• **${r.id}** (weight: ${r.weight}) — ${r.reason}`;
+        const allowRules = rulesData.rules.filter((r: Rule) => r.action === "allow");
+        const blockRules = rulesData.rules.filter((r: Rule) => r.action === "block");
+        const fmt = (r: Rule) => `• **${r.id}** (weight: ${r.weight}) — ${r.reason}`;
 
         return [
-          `**ETS Rules** (${data.rules.length} total)`,
+          `**ETS Rules** (${rulesData.rules.length} total)`,
           "",
           `**✅ Allow rules (${allowRules.length}):**`,
           ...allowRules.map(fmt),
@@ -632,45 +701,37 @@ export default function register(api: any): void {
         ].join("\n");
       }
 
-      if (sub === "stats" || sub === "") {
-        const { stdout, stderr, status } = runFilter(
-          ["--stats", "--rules", rulesPath, "--db", dbPath],
-          undefined,
-          baseEnv
-        );
-        if (status !== 0) {
-          return `❌ ETS stats error: ${stderr.slice(0, 300)}`;
-        }
-        let s: any;
-        try {
-          s = JSON.parse(stdout);
-        } catch {
-          return `❌ Failed to parse stats output`;
-        }
-
-        const pct = (n: number, total: number) =>
-          total > 0 ? ` (${Math.round((n / total) * 100)}%)` : "";
-
-        const top5 = (s.rule_hits ?? [])
-          .slice(0, 5)
-          .map((h: any) => `  • ${h.rule_id}: ${h.hit_count} hits`)
-          .join("\n");
-
-        return [
-          `**ETS Filter Stats**`,
-          `Total runs: ${s.total_runs}`,
-          `Total emails processed: ${s.total_emails}`,
-          `Passed: ${s.total_passed}${pct(s.total_passed, s.total_emails)}`,
-          `Blocked: ${s.total_blocked}${pct(s.total_blocked, s.total_emails)}`,
-          `Uncertain: ${s.total_uncertain}${pct(s.total_uncertain, s.total_emails)}`,
-          top5 ? `\n**Top 5 rules by hits:**\n${top5}` : "",
-        ]
-          .filter(Boolean)
-          .join("\n");
+      // Default: stats
+      const { stdout, stderr, status } = runEts(["stats"]); // (#9)
+      if (status !== 0) {
+        return `❌ ETS stats error: ${stderr.slice(0, 300)}`;
+      }
+      let s: any;
+      try {
+        s = JSON.parse(stdout);
+      } catch {
+        return `❌ Failed to parse stats output`;
       }
 
-      return `Unknown subcommand: \`${sub}\`. Usage: \`/ets stats\` | \`/ets rules\` | \`/ets version\` | \`/ets pipeline\``;
+      const pct = (n: number, total: number) =>
+        total > 0 ? ` (${Math.round((n / total) * 100)}%)` : "";
 
+      const top5 = (s.rule_hits ?? [])
+        .slice(0, 5)
+        .map((h: any) => `  • ${h.rule_id}: ${h.hit_count} hits`)
+        .join("\n");
+
+      return [
+        `**ETS Filter Stats** (${binaryAvailable ? "🦀 Rust" : "🐍 Python"})`,
+        `Total runs: ${s.total_runs}`,
+        `Total emails processed: ${s.total_emails}`,
+        `Passed: ${s.total_passed}${pct(s.total_passed, s.total_emails)}`,
+        `Blocked: ${s.total_blocked}${pct(s.total_blocked, s.total_emails)}`,
+        `Uncertain: ${s.total_uncertain}${pct(s.total_uncertain, s.total_emails)}`,
+        top5 ? `\n**Top 5 rules by hits:**\n${top5}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
     },
   });
 }

@@ -15,7 +15,11 @@ import os
 import re
 import sys
 import time
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+
+# Module-level compiled regex — not recompiled on every _get_domain() call (#10)
+_DOMAIN_RE = re.compile(r"@([\w.\-]+)")
 
 # ---------------------------------------------------------------------------
 # Template Engine
@@ -71,7 +75,8 @@ class TemplateEngine:
 
     @staticmethod
     def _get_domain(from_addr: str) -> str:
-        m = re.search(r"@([\w.\-]+)", from_addr or "")
+        # Uses module-level _DOMAIN_RE — not recompiled on every call (#10)
+        m = _DOMAIN_RE.search(from_addr or "")
         return m.group(1).lower() if m else ""
 
     @staticmethod
@@ -261,19 +266,19 @@ class TemplateEngine:
 # ---------------------------------------------------------------------------
 
 def _load_engine(templates_path: Optional[str] = None) -> TemplateEngine:
+    # Use pathlib.Path consistently throughout (#11)
     if not templates_path:
         templates_path = os.environ.get("ETS_TEMPLATES_PATH", "")
-    if not templates_path:
-        # Default: same directory as this script
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        templates_path = os.path.join(script_dir, "extractor_templates.json")
-    if not os.path.exists(templates_path):
+    path = Path(templates_path) if templates_path else (
+        Path(__file__).parent.resolve() / "extractor_templates.json"
+    )
+    if not path.exists():
         print(
-            json.dumps({"error": f"Templates file not found: {templates_path}"}),
+            json.dumps({"error": f"Templates file not found: {path}"}),
             file=sys.stderr,
         )
         sys.exit(1)
-    return TemplateEngine(templates_path)
+    return TemplateEngine(str(path))
 
 
 def run(

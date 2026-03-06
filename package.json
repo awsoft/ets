@@ -1,6 +1,6 @@
 {
   "name": "@awsoft/openclaw-ets",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "ETS — Email Token Saver. Rules-based email pre-filter plugin for OpenClaw. Strips noise before LLM sees it.",
   "keywords": [
     "openclaw",
@@ -27,6 +27,12 @@
     "openclaw.plugin.json",
     "README.md",
     "LICENSE",
-    "logo.png"
-  ]
+    "logo.png",
+    "src/",
+    "Cargo.toml",
+    "Cargo.lock"
+  ],
+  "scripts": {
+    "postinstall": "cargo build --release 2>/dev/null && mkdir -p bin && cp target/release/ets bin/ets || true"
+  }
 }
