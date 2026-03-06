@@ -1,5 +1,4 @@
-ets.db
+target/
 __pycache__/
 *.pyc
-target/
-bin/
+ets.db

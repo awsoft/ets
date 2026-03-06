@@ -5,9 +5,31 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::path::Path;
 
+// ---------------------------------------------------------------------------
+// All recognised tag category names — used for normalisation/clamping
+// ---------------------------------------------------------------------------
+const TAG_CATEGORIES: &[&str] = &[
+    "action_required", "personal", "financial", "investment",
+    "job", "kids", "travel", "marketing", "social", "newsletter",
+];
+
+// Default tags for unclassified (no template matched)
+fn default_tags() -> HashMap<String, f64> {
+    let mut m = HashMap::new();
+    m.insert("personal".to_string(), 0.3);
+    m.insert("action_required".to_string(), 0.2);
+    m
+}
+
+// ---------------------------------------------------------------------------
+// JSON schema structs
+// ---------------------------------------------------------------------------
+
 #[derive(Debug, Deserialize)]
 pub struct TemplatesFile {
     pub templates: Vec<Template>,
+    #[serde(default)]
+    pub tag_rules: Vec<TagRule>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -19,6 +41,9 @@ pub struct Template {
     pub email_type: String,
     pub detect: DetectRules,
     pub extract: HashMap<String, FieldDef>,
+    /// Base tag weights for this template type (0.0–1.0 per category).
+    #[serde(default)]
+    pub tags: HashMap<String, f64>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -40,18 +65,44 @@ pub struct FieldDef {
     pub max_chars: Option<usize>,
 }
 
+#[derive(Debug, Deserialize, Clone)]
+pub struct TagRule {
+    pub id: String,
+    #[serde(rename = "match")]
+    pub match_rules: TagMatch,
+    pub adjust: HashMap<String, f64>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct TagMatch {
+    pub subject_regex: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Compiled forms
+// ---------------------------------------------------------------------------
+
 struct CompiledTemplate {
     template: Template,
     subject_re: Option<Regex>,
     snippet_re: Option<Regex>,
-    // field_name -> compiled extraction regex
     field_regexes: HashMap<String, Regex>,
-    // field_name -> [(compiled_pattern, value)]
     enum_regexes: HashMap<String, Vec<(Regex, String)>>,
 }
 
+struct CompiledTagRule {
+    _id: String,
+    pattern: Option<Regex>,
+    adjust: HashMap<String, f64>,
+}
+
+// ---------------------------------------------------------------------------
+// Engine
+// ---------------------------------------------------------------------------
+
 pub struct TemplateEngine {
     templates: Vec<CompiledTemplate>,
+    tag_rules: Vec<CompiledTagRule>,
 }
 
 impl TemplateEngine {
@@ -61,10 +112,11 @@ impl TemplateEngine {
         let mut file: TemplatesFile =
             serde_json::from_str(&raw).with_context(|| "Templates JSON parse error")?;
 
-        // Sort by priority descending — highest priority matched first
+        // Sort templates by priority descending
         file.templates.sort_by(|a, b| b.priority.cmp(&a.priority));
 
-        let mut compiled = Vec::new();
+        // Compile templates
+        let mut compiled_templates = Vec::new();
         for tmpl in file.templates {
             let subject_re = tmpl
                 .detect
@@ -99,7 +151,7 @@ impl TemplateEngine {
                 }
             }
 
-            compiled.push(CompiledTemplate {
+            compiled_templates.push(CompiledTemplate {
                 template: tmpl,
                 subject_re,
                 snippet_re,
@@ -108,10 +160,34 @@ impl TemplateEngine {
             });
         }
 
-        Ok(TemplateEngine { templates: compiled })
+        // Compile tag rules
+        let compiled_tag_rules = file
+            .tag_rules
+            .into_iter()
+            .map(|rule| {
+                let pattern = rule
+                    .match_rules
+                    .subject_regex
+                    .as_deref()
+                    .and_then(|p| Regex::new(p).ok());
+                CompiledTagRule {
+                    _id: rule.id,
+                    pattern,
+                    adjust: rule.adjust,
+                }
+            })
+            .collect();
+
+        Ok(TemplateEngine {
+            templates: compiled_templates,
+            tag_rules: compiled_tag_rules,
+        })
     }
 
-    /// Extract the domain from an email address (handles "Name <addr>" format).
+    // ------------------------------------------------------------------
+    // Helpers
+    // ------------------------------------------------------------------
+
     fn get_domain(from: &str) -> String {
         let addr = if let (Some(s), Some(e)) = (from.find('<'), from.rfind('>')) {
             from[s + 1..e].trim()
@@ -125,7 +201,6 @@ impl TemplateEngine {
         }
     }
 
-    /// Derive a display name from the email's from/from_name fields.
     fn get_from_name(email: &Value) -> String {
         if let Some(name) = email.get("from_name").and_then(|v| v.as_str()) {
             let t = name.trim();
@@ -133,47 +208,30 @@ impl TemplateEngine {
                 return t.to_string();
             }
         }
-        let from = email
-            .get("from")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        // "Name <addr>" pattern
+        let from = email.get("from").and_then(|v| v.as_str()).unwrap_or("");
         if let Ok(re) = Regex::new(r#"^"?([^"<]+?)"?\s*<"#) {
             if let Some(cap) = re.captures(from) {
                 return cap[1].trim().to_string();
             }
         }
-        // Fall back to local part of address
         let local = from.split('@').next().unwrap_or(from);
         local.replace(['.', '_', '-'], " ")
     }
 
-    /// Get the text for a named source field.
     fn get_source_text<'a>(source: &str, email: &'a Value, from_name: &'a str) -> &'a str {
         match source {
-            "subject" => email
-                .get("subject")
-                .and_then(|v| v.as_str())
-                .unwrap_or(""),
-            "snippet" => email
-                .get("snippet")
-                .and_then(|v| v.as_str())
-                .unwrap_or(""),
+            "subject" => email.get("subject").and_then(|v| v.as_str()).unwrap_or(""),
+            "snippet" => email.get("snippet").and_then(|v| v.as_str()).unwrap_or(""),
             "sender" => email.get("from").and_then(|v| v.as_str()).unwrap_or(""),
             "from_name" => from_name,
             _ => "",
         }
     }
 
-    /// Check whether an email matches a template's detect rules.
     fn matches_detect(&self, ct: &CompiledTemplate, email: &Value) -> bool {
         let detect = &ct.template.detect;
         let any_mode = detect.any.unwrap_or(false);
-        let from = email
-            .get("from")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_lowercase();
+        let from = email.get("from").and_then(|v| v.as_str()).unwrap_or("").to_lowercase();
         let domain = Self::get_domain(&from);
         let subject = email.get("subject").and_then(|v| v.as_str()).unwrap_or("");
         let snippet = email.get("snippet").and_then(|v| v.as_str()).unwrap_or("");
@@ -196,14 +254,9 @@ impl TemplateEngine {
         if checks.is_empty() {
             return true;
         }
-        if any_mode {
-            checks.iter().any(|&b| b)
-        } else {
-            checks.iter().all(|&b| b)
-        }
+        if any_mode { checks.iter().any(|&b| b) } else { checks.iter().all(|&b| b) }
     }
 
-    /// Apply a single field definition to an email, returning the extracted value.
     fn apply_field(
         &self,
         ct: &CompiledTemplate,
@@ -212,7 +265,6 @@ impl TemplateEngine {
         email: &Value,
         from_name: &str,
     ) -> Option<Value> {
-        // Static value always wins
         if let Some(sv) = &field_def.static_value {
             return Some(sv.clone());
         }
@@ -237,14 +289,10 @@ impl TemplateEngine {
                 continue;
             }
 
-            // Regex: return first capture group or full match
             if has_regex {
                 if let Some(re) = ct.field_regexes.get(field_name) {
                     if let Some(caps) = re.captures(text) {
-                        let val = caps
-                            .get(1)
-                            .or_else(|| caps.get(0))
-                            .map(|m| m.as_str().trim())?;
+                        let val = caps.get(1).or_else(|| caps.get(0)).map(|m| m.as_str().trim())?;
                         let val = if let Some(max) = max_chars {
                             &val[..val.len().min(max)]
                         } else {
@@ -255,7 +303,6 @@ impl TemplateEngine {
                 }
             }
 
-            // Enum map: first matching pattern wins
             if has_enum {
                 if let Some(pairs) = ct.enum_regexes.get(field_name) {
                     for (re, value) in pairs {
@@ -266,7 +313,6 @@ impl TemplateEngine {
                 }
             }
 
-            // Pure truncation (no regex, no enum_map)
             if !has_regex && !has_enum {
                 if let Some(max) = max_chars {
                     return Some(Value::String(
@@ -278,75 +324,136 @@ impl TemplateEngine {
         None
     }
 
-    /// Run extraction over filter output. Processes passed + uncertain buckets;
-    /// blocked emails are dropped (counted in stats).
+    // ------------------------------------------------------------------
+    // Tag computation
+    // ------------------------------------------------------------------
+
+    /// Apply base template tags + tag_rules adjustments (max merge) → final tags map.
+    fn compute_tags(&self, email: &Value, base_tags: &HashMap<String, f64>) -> HashMap<String, f64> {
+        let mut tags: HashMap<String, f64> = base_tags.clone();
+
+        let subject = email.get("subject").and_then(|v| v.as_str()).unwrap_or("");
+        let snippet = email.get("snippet").and_then(|v| v.as_str()).unwrap_or("");
+        // Check rules against subject; also check snippet for broader coverage
+        let check_texts = [subject, snippet];
+
+        for rule in &self.tag_rules {
+            if let Some(re) = &rule.pattern {
+                let matched = check_texts.iter().any(|t| !t.is_empty() && re.is_match(t));
+                if matched {
+                    for (category, &value) in &rule.adjust {
+                        let current = tags.get(category.as_str()).copied().unwrap_or(0.0);
+                        tags.insert(category.clone(), current.max(value));
+                    }
+                }
+            }
+        }
+
+        // Normalise: keep only known categories, clamp to [0.0, 1.0], drop zeros
+        let mut result = HashMap::new();
+        for &cat in TAG_CATEGORIES {
+            let v = tags.get(cat).copied().unwrap_or(0.0).clamp(0.0, 1.0);
+            if v > 0.0 {
+                result.insert(cat.to_string(), v);
+            }
+        }
+        result
+    }
+
+    /// Derive snippet policy from final tags.
+    /// Returns ("full"|"short"|"omitted", effective_cap)
+    fn snippet_policy(tags: &HashMap<String, f64>) -> (&'static str, usize) {
+        let action_req = tags.get("action_required").copied().unwrap_or(0.0);
+        let personal   = tags.get("personal").copied().unwrap_or(0.0);
+        let investment = tags.get("investment").copied().unwrap_or(0.0);
+
+        if action_req >= 0.6 || personal >= 0.7 {
+            ("full", usize::MAX)
+        } else if action_req >= 0.3 || personal >= 0.4 || investment >= 0.7 {
+            ("short", 100)
+        } else {
+            ("omitted", 0)
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Batch extraction
+    // ------------------------------------------------------------------
+
     pub fn extract_batch(&self, filter_output: &Value, snippet_cap: usize, explain: bool) -> Value {
         let start = std::time::Instant::now();
 
         let empty = vec![];
-        let passed = filter_output
-            .get("passed")
-            .and_then(|v| v.as_array())
-            .unwrap_or(&empty);
-        let uncertain = filter_output
-            .get("uncertain")
-            .and_then(|v| v.as_array())
-            .unwrap_or(&empty);
-        let blocked = filter_output
-            .get("blocked")
-            .and_then(|v| v.as_array())
-            .unwrap_or(&empty);
+        let passed   = filter_output.get("passed").and_then(|v| v.as_array()).unwrap_or(&empty);
+        let uncertain = filter_output.get("uncertain").and_then(|v| v.as_array()).unwrap_or(&empty);
+        let blocked  = filter_output.get("blocked").and_then(|v| v.as_array()).unwrap_or(&empty);
 
         let mut results: Vec<Value> = Vec::new();
         let mut extracted_structured: usize = 0;
         let mut snippet_only: usize = 0;
+        let mut tags_only: usize = 0;
 
         for (bucket, emails) in [("passed", passed), ("uncertain", uncertain)] {
             for email in emails {
                 let from_name = Self::get_from_name(email);
                 let subject = email.get("subject").and_then(|v| v.as_str()).unwrap_or("");
                 let snippet = email.get("snippet").and_then(|v| v.as_str()).unwrap_or("");
-                let from = email.get("from").and_then(|v| v.as_str()).unwrap_or("");
-                let date = email.get("date").and_then(|v| v.as_str()).unwrap_or("");
-                let id = email.get("id").and_then(|v| v.as_str()).unwrap_or("");
+                let from    = email.get("from").and_then(|v| v.as_str()).unwrap_or("");
+                let date    = email.get("date").and_then(|v| v.as_str()).unwrap_or("");
+                let id      = email.get("id").and_then(|v| v.as_str()).unwrap_or("");
 
                 let mut matched_template: Option<&str> = None;
                 let mut email_type = "unclassified";
+                let mut base_tags: HashMap<String, f64> = default_tags();
                 let mut extracted = serde_json::Map::new();
-                let mut effective_cap = snippet_cap;
 
                 for ct in &self.templates {
                     if self.matches_detect(ct, email) {
                         matched_template = Some(ct.template.id.as_str());
                         email_type = ct.template.email_type.as_str();
-
-                        // Financial alerts always get uncapped snippet
-                        if email_type == "financial_alert" {
-                            effective_cap = usize::MAX;
-                        }
+                        base_tags = ct.template.tags.clone();
 
                         for (fname, fdef) in &ct.template.extract {
-                            if let Some(val) =
-                                self.apply_field(ct, fname, fdef, email, &from_name)
-                            {
+                            if let Some(val) = self.apply_field(ct, fname, fdef, email, &from_name) {
                                 extracted.insert(fname.clone(), val);
                             }
                         }
-                        break; // first match wins
+                        break;
                     }
                 }
 
-                let capped_snippet = if effective_cap < snippet.len() {
-                    &snippet[..effective_cap]
+                // Compute final tags (base + tag_rules via max merge)
+                let final_tags = self.compute_tags(email, &base_tags);
+                let (policy, tag_cap) = Self::snippet_policy(&final_tags);
+
+                // Apply snippet: tag policy cap, bounded by caller's snippet_cap for full
+                let final_snippet: Value = if policy == "omitted" {
+                    Value::Null
                 } else {
-                    snippet
+                    let cap = if policy == "full" {
+                        snippet_cap
+                    } else {
+                        tag_cap.min(snippet_cap)
+                    };
+                    if snippet.is_empty() {
+                        Value::Null
+                    } else {
+                        let end = snippet.len().min(cap);
+                        Value::String(snippet[..end].to_string())
+                    }
                 };
 
+                // Build tags JSON object (only non-zero values)
+                let tags_json: serde_json::Map<String, Value> = final_tags
+                    .iter()
+                    .map(|(k, v)| (k.clone(), Value::from(*v)))
+                    .collect();
+
                 let has_extracted = !extracted.is_empty();
-                if email_type != "unclassified" && has_extracted {
-                    extracted_structured += 1;
-                } else {
-                    snippet_only += 1;
+                match policy {
+                    "omitted" => tags_only += 1,
+                    _ if email_type != "unclassified" && has_extracted => extracted_structured += 1,
+                    _ => snippet_only += 1,
                 }
 
                 let mut record = serde_json::json!({
@@ -355,7 +462,9 @@ impl TemplateEngine {
                     "subject": subject,
                     "date": date,
                     "type": email_type,
-                    "snippet": capped_snippet,
+                    "tags": Value::Object(tags_json),
+                    "snippet": final_snippet,
+                    "snippet_policy_applied": policy,
                     "source_bucket": bucket,
                     "matched_template": matched_template,
                 });
@@ -372,9 +481,9 @@ impl TemplateEngine {
             }
         }
 
-        let results_len = results.len();
-        let blocked_len = blocked.len();
-        let elapsed_ms = start.elapsed().as_millis() as u64;
+        let results_len  = results.len();
+        let blocked_len  = blocked.len();
+        let elapsed_ms   = start.elapsed().as_millis() as u64;
 
         serde_json::json!({
             "emails": results,
@@ -383,6 +492,7 @@ impl TemplateEngine {
                 "blocked_dropped": blocked_len,
                 "extracted_structured": extracted_structured,
                 "snippet_only": snippet_only,
+                "tags_only": tags_only,
                 "snippet_cap": snippet_cap,
                 "elapsed_ms": elapsed_ms
             }

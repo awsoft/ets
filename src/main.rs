@@ -55,7 +55,7 @@ fn read_stdin() -> Result<String> {
 // ---------------------------------------------------------------------------
 
 #[derive(Parser)]
-#[command(name = "ets", about = "ETS — Email Token Saver", version = "1.2.0")]
+#[command(name = "ets", about = "ETS — Email Token Saver", version = "1.3.0")]
 struct Cli {
     /// Path to email_rules.json
     #[arg(long, env = "ETS_RULES_PATH")]

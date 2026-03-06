@@ -1,9 +1,81 @@
 {
   "_meta": {
-    "version": 1,
-    "description": "ETS extraction templates. Each template defines how to detect an email type and what fields to extract. Templates are matched in priority order (highest first). Add new templates here or via the ets_add_extractor agent tool.",
-    "agent_instructions": "To add a new extractor template, use the ets_add_extractor tool or append an entry to this file following the schema below. Set a unique id, a descriptive name, detection rules, extraction patterns, and a priority (higher = matched first). Site-specific extractors (e.g. for Amazon, Walmart) should have priority >= 100. Generic type extractors should have priority 50-99."
+    "version": 2,
+    "description": "ETS extraction templates v1.3.0. Each template defines how to detect an email type and what fields to extract. Templates are matched in priority order (highest first). Tags apply weighted category scores to each email; snippet policy is derived from final tag scores.",
+    "agent_instructions": "To add a new extractor template, use the ets_add_extractor tool or append an entry to templates[] following the schema below. Required fields: id (unique snake_case), name, priority, type, detect, extract, tags.\n\n--- TAGS ---\ntags is an object with weighted scores (0.0–1.0) for any of: action_required, personal, financial, investment, job, kids, travel, marketing, social, newsletter. Only include categories relevant to this template type — others default to 0.0. The cross-cutting tag_rules array applies additional score adjustments based on subject/snippet regex matching (using max() merge), so your base tags only need to capture what is unconditionally true for this template type.\n\nSnippet policy (applied automatically from final tag scores after tag_rules merge):\n  full snippet:  action_required >= 0.6 OR personal >= 0.7\n  100 chars:     action_required >= 0.3 OR personal >= 0.4 OR investment >= 0.7\n  omitted:       everything else (tags + extracted fields only — no snippet tokens)\n\n--- PRIORITY GUIDE ---\n  >= 110  Specific sender domain + specific subject regex (UPS shipping, Amazon orders)\n  100–109 Site-specific: any email from a known sender domain\n  75–99   High-confidence generic type (financial alerts, job emails, calendar invites)\n  50–74   Broad generic type (generic shipping, billing, order confirms)\n  < 50    Fallback / catch-all patterns\n\n--- DETECT ---\nAt least one rule required: sender_domain (exact), sender_contains (substring), subject_regex, snippet_regex. All must match unless 'any: true'.\n\n--- EXTRACT ---\nEach field uses one of: static (fixed value), regex (returns capture group 1), enum_map ({pattern: value}, first match wins), or max_chars alone (truncates source text). Source can be a string or array tried in order: 'subject', 'snippet', 'sender', 'from_name'.\n\n--- EXAMPLE: Etsy order template ---\n{\n  \"id\": \"etsy-order\",\n  \"name\": \"Etsy Order Confirmation\",\n  \"priority\": 105,\n  \"type\": \"order_confirm\",\n  \"detect\": {\n    \"sender_domain\": \"etsy.com\",\n    \"subject_regex\": \"(?i)(order confirmed|you bought|receipt)\"\n  },\n  \"tags\": {\"marketing\": 0.1, \"financial\": 0.3, \"action_required\": 0.0},\n  \"extract\": {\n    \"order_number\": {\"source\": [\"subject\", \"snippet\"], \"regex\": \"#(\\\\d{8,})\"},\n    \"total\": {\"source\": \"snippet\", \"regex\": \"\\\\$[\\\\d,]+\\\\.?\\\\d*\"},\n    \"shop\": {\"source\": \"snippet\", \"regex\": \"(?:from|shop:)\\\\s+([A-Za-z0-9 ]{2,40})\"},\n    \"item_hint\": {\"source\": \"snippet\", \"max_chars\": 80}\n  }\n}",
+    "_tag_schema": {
+      "description": "Tag categories applied to every email. Values 0.0-1.0.",
+      "categories": {
+        "action_required": "Needs Drew to do something",
+        "personal": "From a real person (not automated)",
+        "financial": "Money, banking, billing related",
+        "investment": "Stocks, markets, portfolio",
+        "job": "Employment, recruiting, career",
+        "kids": "School, sports, kids activities",
+        "travel": "Flights, hotels, car rentals",
+        "marketing": "Promotional or advertising",
+        "social": "Social platforms, community",
+        "newsletter": "Informational digest with no action needed"
+      },
+      "snippet_policy": {
+        "full": "action_required >= 0.6 OR personal >= 0.7",
+        "short_100": "action_required >= 0.3 OR personal >= 0.4 OR investment >= 0.7",
+        "omit": "everything else — tags only, no snippet"
+      }
+    }
   },
+  "tag_rules": [
+    {
+      "id": "tag-urgent",
+      "match": {"subject_regex": "(?i)(urgent|action required|immediate action|expires today|time.sensitive|respond by|deadline)"},
+      "adjust": {"action_required": 0.9, "personal": 0.3}
+    },
+    {
+      "id": "tag-personal-greeting",
+      "match": {"subject_regex": "(?i)^(re:|fwd:|hey |hi |hello )"},
+      "adjust": {"personal": 0.8, "action_required": 0.4}
+    },
+    {
+      "id": "tag-investment",
+      "match": {"subject_regex": "(?i)(stock|portfolio|market|dividend|earnings|ticker|investment|trading|bull|bear|nasdaq|s&p|etf|reit|yield)"},
+      "adjust": {"investment": 0.85, "newsletter": 0.3}
+    },
+    {
+      "id": "tag-kids-school",
+      "match": {"subject_regex": "(?i)(school|grade|class|student|parent|permission|field trip|pickup|dismissal|lunch|yearbook|pta|teacher|homework)"},
+      "adjust": {"kids": 0.85, "personal": 0.4, "action_required": 0.4}
+    },
+    {
+      "id": "tag-kids-sports",
+      "match": {"subject_regex": "(?i)(game|practice|tournament|schedule|team|coach|player|registration|tryout|match|kickoff|lineup)"},
+      "adjust": {"kids": 0.7, "action_required": 0.3}
+    },
+    {
+      "id": "tag-travel",
+      "match": {"subject_regex": "(?i)(flight|hotel|reservation|check.in|itinerary|boarding|arrival|departure|booking confirmation|car rental)"},
+      "adjust": {"travel": 0.85, "action_required": 0.3}
+    },
+    {
+      "id": "tag-newsletter",
+      "match": {"subject_regex": "(?i)(newsletter|digest|roundup|weekly|monthly|daily briefing|morning brief|update from|top stories)"},
+      "adjust": {"newsletter": 0.85, "action_required": 0.0, "personal": 0.0}
+    },
+    {
+      "id": "tag-payment-needed",
+      "match": {"subject_regex": "(?i)(payment (due|overdue|required|past due|failed)|invoice (due|overdue)|amount due|bill (due|overdue))"},
+      "adjust": {"financial": 0.8, "action_required": 0.8}
+    },
+    {
+      "id": "tag-social",
+      "match": {"subject_regex": "(?i)(commented on|mentioned you|replied to|liked your|followed you|friend request|connection request|message from)"},
+      "adjust": {"social": 0.8, "personal": 0.5, "action_required": 0.2}
+    },
+    {
+      "id": "tag-marketing",
+      "match": {"subject_regex": "(?i)(\\d+% off|sale|deal|offer|discount|promo|coupon|save|shop|buy now|limited time|clearance|flash sale)"},
+      "adjust": {"marketing": 0.9, "action_required": 0.0, "newsletter": 0.3}
+    }
+  ],
   "templates": [
     {
       "id": "amazon-shipping",
@@ -14,19 +86,14 @@
         "sender_domain": "amazon.com",
         "subject_regex": "(?i)(shipped|out for delivery|delivered|arriving)"
       },
+      "tags": {"travel": 0.3, "marketing": 0.0, "action_required": 0.0, "newsletter": 0.0},
       "extract": {
         "order_number": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "regex": "(?i)Order\\s*#?([A-Z0-9\\-]{10,})"
         },
         "status": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "enum_map": {
             "(?i)out.?for.?delivery|on its way|with delivery driver": "out_for_delivery",
             "(?i)\\bdelivered\\b|delivery complete|has been delivered": "delivered",
@@ -56,19 +123,14 @@
         "sender_contains": "ups.com",
         "subject_regex": "(?i)(shipped|out for delivery|delivered|arriving|pickup ready)"
       },
+      "tags": {"travel": 0.3, "marketing": 0.0, "action_required": 0.0, "newsletter": 0.0},
       "extract": {
         "tracking_number": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "regex": "(1Z[A-Z0-9]{16})"
         },
         "status": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "enum_map": {
             "(?i)out.?for.?delivery|on its way": "out_for_delivery",
             "(?i)\\bdelivered\\b|delivery complete": "delivered",
@@ -94,19 +156,14 @@
         "sender_contains": "fedex.com",
         "subject_regex": "(?i)(shipped|out for delivery|delivered|arriving|exception)"
       },
+      "tags": {"travel": 0.3, "marketing": 0.0, "action_required": 0.0, "newsletter": 0.0},
       "extract": {
         "tracking_number": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "regex": "\\b(\\d{12}|\\d{15}|\\d{20})\\b"
         },
         "status": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "enum_map": {
             "(?i)out.?for.?delivery|on vehicle": "out_for_delivery",
             "(?i)\\bdelivered\\b|delivery complete": "delivered",
@@ -132,19 +189,14 @@
         "sender_contains": "usps.com",
         "subject_regex": "(?i)(shipped|out for delivery|delivered|arriving|in transit|pickup)"
       },
+      "tags": {"travel": 0.3, "marketing": 0.0, "action_required": 0.0, "newsletter": 0.0},
       "extract": {
         "tracking_number": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "regex": "\\b(9[234]\\d{18,20}|[A-Z]{2}\\d{9}[A-Z]{2})\\b"
         },
         "status": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "enum_map": {
             "(?i)out.?for.?delivery|out for post": "out_for_delivery",
             "(?i)\\bdelivered\\b|delivery complete": "delivered",
@@ -170,19 +222,14 @@
         "sender_contains": "dhl.com",
         "subject_regex": "(?i)(shipped|out for delivery|delivered|arriving|transit)"
       },
+      "tags": {"travel": 0.3, "marketing": 0.0, "action_required": 0.0, "newsletter": 0.0},
       "extract": {
         "tracking_number": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "regex": "\\b(\\d{10,11}|[A-Z]{3}\\d{7,})\\b"
         },
         "status": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "enum_map": {
             "(?i)out.?for.?delivery|with courier": "out_for_delivery",
             "(?i)\\bdelivered\\b|delivery complete": "delivered",
@@ -207,19 +254,14 @@
         "sender_domain": "walmart.com",
         "subject_regex": "(?i)(shipped|out for delivery|delivered|arriving|pickup ready)"
       },
+      "tags": {"travel": 0.3, "marketing": 0.0, "action_required": 0.0, "newsletter": 0.0},
       "extract": {
         "tracking_number": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "regex": "(?:tracking[:\\s#]+|1Z)([A-Z0-9]{10,})"
         },
         "status": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "enum_map": {
             "(?i)out.?for.?delivery|on its way": "out_for_delivery",
             "(?i)\\bdelivered\\b|delivery complete": "delivered",
@@ -242,19 +284,14 @@
         "sender_domain": "ebay.com",
         "subject_regex": "(?i)(shipped|out for delivery|delivered)"
       },
+      "tags": {"travel": 0.3, "marketing": 0.0, "action_required": 0.0, "newsletter": 0.0},
       "extract": {
         "tracking_number": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "regex": "(?:tracking[:\\s#]+|1Z)([A-Z0-9]{10,})"
         },
         "carrier": {
-          "source": [
-            "sender",
-            "snippet"
-          ],
+          "source": ["sender", "snippet"],
           "enum_map": {
             "(?i)ups\\.com|\\bUPS\\b|united.?parcel": "UPS",
             "(?i)fedex\\.com|\\bFedEx\\b|federal.?express": "FedEx",
@@ -263,10 +300,7 @@
           }
         },
         "status": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "enum_map": {
             "(?i)out.?for.?delivery|on its way": "out_for_delivery",
             "(?i)\\bdelivered\\b|delivery complete": "delivered",
@@ -288,19 +322,14 @@
         "sender_domain": "paypal.com",
         "subject_regex": "(?i)(receipt|payment|sent|received|charged|you paid|you received)"
       },
+      "tags": {"financial": 0.9, "action_required": 0.4},
       "extract": {
         "amount": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "regex": "\\$[\\d,]+\\.?\\d*"
         },
         "direction": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "enum_map": {
             "(?i)you sent|you paid|payment sent": "sent",
             "(?i)you received|payment received|money received": "received",
@@ -308,10 +337,7 @@
           }
         },
         "counterparty": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "regex": "(?:to|from|with)\\s+([A-Za-z0-9 ]{2,40}?)(?:\\s+for|\\s+on|\\.|$)"
         }
       }
@@ -325,19 +351,14 @@
         "sender_domain": "amazon.com",
         "subject_regex": "(?i)(order (confirmed|received|placed))"
       },
+      "tags": {"marketing": 0.1, "financial": 0.3, "action_required": 0.0},
       "extract": {
         "order_number": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "regex": "(?i)#([A-Z0-9\\-]{10,})"
         },
         "total": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "regex": "\\$[\\d,]+\\.?\\d*"
         },
         "item_hint": {
@@ -355,19 +376,14 @@
         "sender_domain": "walmart.com",
         "subject_regex": "(?i)(order (confirmed|received|placed)|thank you for your order|your receipt)"
       },
+      "tags": {"marketing": 0.1, "financial": 0.3, "action_required": 0.0},
       "extract": {
         "order_number": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "regex": "(?:order|#)\\s*([0-9\\-]{6,})"
         },
         "total": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "regex": "\\$[\\d,]+\\.?\\d*"
         },
         "item_hint": {
@@ -385,19 +401,14 @@
         "sender_domain": "ebay.com",
         "subject_regex": "(?i)(order|purchase|won|you bought)"
       },
+      "tags": {"marketing": 0.1, "financial": 0.3, "action_required": 0.0},
       "extract": {
         "order_number": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "regex": "(?:order|item)\\s*#?(\\d{10,})"
         },
         "total": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "regex": "\\$[\\d,]+\\.?\\d*"
         },
         "seller": {
@@ -418,12 +429,10 @@
       "detect": {
         "sender_contains": "stripe.com"
       },
+      "tags": {"financial": 0.9, "action_required": 0.4},
       "extract": {
         "amount": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "regex": "\\$[\\d,]+\\.?\\d*"
         },
         "merchant": {
@@ -445,19 +454,14 @@
         "sender_domain": "github.com",
         "subject_regex": "(?i)(pull request|issue|review|mention|assigned)"
       },
+      "tags": {"job": 0.5, "personal": 0.3, "action_required": 0.5},
       "extract": {
         "repo": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "regex": "([a-zA-Z0-9_\\-]+/[a-zA-Z0-9_\\-]+)"
         },
         "action": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "enum_map": {
             "(?i)mentioned you|@mention": "mentioned",
             "(?i)assigned to you|you were assigned": "assigned",
@@ -469,10 +473,7 @@
           }
         },
         "pr_or_issue_number": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "regex": "#(\\d+)"
         }
       }
@@ -485,23 +486,18 @@
       "detect": {
         "subject_regex": "(?i)(invited you to|invitation:|calendar invite|you.re invited|save the date)"
       },
+      "tags": {"personal": 0.6, "action_required": 0.7},
       "extract": {
         "event_name": {
           "source": "subject",
           "regex": "(?:invitation:|invited you to|you.re invited to|save the date:?)\\s*(.+)"
         },
         "date_hint": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "regex": "(?:on|for|at)\\s+([A-Za-z]+ \\d+,?\\s*\\d{4}|(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\\w*,?\\s*[A-Za-z]+ \\d+)"
         },
         "time_hint": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "regex": "\\b(\\d{1,2}:\\d{2}\\s*(?:AM|PM|am|pm))\\b"
         },
         "location_hint": {
@@ -518,12 +514,10 @@
       "detect": {
         "subject_regex": "(?i)(fraud (alert|detected)|unusual (activity|sign.in|login)|account (locked|suspended|compromised|disabled|restricted)|security (alert|notice|warning)|payment (failed|declined)|suspicious (activity|transaction|login)|unauthorized)"
       },
+      "tags": {"financial": 1.0, "action_required": 1.0, "personal": 0.0},
       "extract": {
         "alert_type": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "enum_map": {
             "(?i)fraud|fraudulent|suspicious.(?:activity|charge|transaction)": "fraud",
             "(?i)account.(?:locked|suspended|disabled|compromised)": "account_locked",
@@ -533,17 +527,11 @@
           }
         },
         "account_hint": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "regex": "(?:account|card|ending in)\\s*[*x]*(\\d{4})\\b"
         },
         "amount": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "regex": "\\$[\\d,]+\\.?\\d*"
         },
         "urgent": {
@@ -559,23 +547,18 @@
       "detect": {
         "subject_regex": "(?i)(subscription (expiring|expires|will (renew|expire|end)|ending)|your (trial|subscription|membership) (ends|expires|is expiring) (soon|in \\d+|tomorrow|today)|upcoming (renewal|charge|payment))"
       },
+      "tags": {"financial": 0.5, "action_required": 0.6, "newsletter": 0.2},
       "extract": {
         "service": {
           "source": "from_name",
           "max_chars": 40
         },
         "expiry_date": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "regex": "(?:expires?|ends?|renews?|renewal date)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\d{1,2}/\\d{1,2}/\\d{2,4})"
         },
         "amount": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "regex": "\\$[\\d,]+\\.?\\d*"
         },
         "action_needed": {
@@ -591,16 +574,14 @@
       "detect": {
         "subject_regex": "(?i)(offer letter|interview (invitation|request|scheduled|confirmed)|we.d like to (speak|connect|discuss|interview)|application (moved forward|status update|decision|next steps)|recruiter (outreach|message)|exciting (opportunity|role|position))"
       },
+      "tags": {"job": 0.95, "personal": 0.5, "action_required": 0.85},
       "extract": {
         "company": {
           "source": "from_name",
           "max_chars": 40
         },
         "action": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "enum_map": {
             "(?i)offer letter|we.re (?:pleased|excited|happy|delighted) to offer": "offer",
             "(?i)\\binterview\\b|schedule a call|speak with you|connect with you": "interview",
@@ -609,10 +590,7 @@
           }
         },
         "role": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "regex": "(?:for the|for a|as a|as an|the|a)\\s+([A-Z][a-zA-Z &]+?)(?:\\s+(?:position|role|opportunity|at|with|@)|[,.]|$)"
         },
         "action_summary": {
@@ -629,19 +607,14 @@
       "detect": {
         "subject_regex": "(?i)(has shipped|out for delivery|order delivered|your package|delivery update|shipment (update|confirmation)|delivered today|arriving today|arriving tomorrow|expected delivery|in transit)"
       },
+      "tags": {"travel": 0.3, "marketing": 0.0, "action_required": 0.0, "newsletter": 0.0},
       "extract": {
         "tracking_number": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "regex": "(?:tracking[:\\s#]+|1Z)([A-Z0-9]{10,})|\\b(\\d{20,22})\\b"
         },
         "status": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "enum_map": {
             "(?i)out.?for.?delivery|on its way|with delivery driver": "out_for_delivery",
             "(?i)\\bdelivered\\b|delivery complete|has been delivered": "delivered",
@@ -650,17 +623,11 @@
           }
         },
         "estimated_delivery": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "regex": "(?i)(?:by|arriving|estimated|expected)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\w+day(?:,\\s*[A-Za-z]+ \\d+)?|today|tomorrow)"
         },
         "carrier": {
-          "source": [
-            "sender",
-            "snippet"
-          ],
+          "source": ["sender", "snippet"],
           "enum_map": {
             "(?i)ups\\.com|@ups\\.|\\bUPS\\b|united.?parcel": "UPS",
             "(?i)fedex\\.com|@fedex\\.|\\bFedEx\\b|federal.?express": "FedEx",
@@ -679,19 +646,14 @@
       "detect": {
         "subject_regex": "(?i)(order (confirmed|received|placed|#\\d+)|thank you for (your order|your purchase)|your receipt from|purchase confirmation)"
       },
+      "tags": {"marketing": 0.1, "financial": 0.3, "action_required": 0.0},
       "extract": {
         "order_number": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "regex": "(?:#|order\\s*#?\\s*)([A-Z0-9\\-]{4,})"
         },
         "total": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "regex": "\\$[\\d,]+\\.?\\d*"
         },
         "merchant": {
@@ -708,19 +670,14 @@
       "detect": {
         "subject_regex": "(?i)(bill|invoice|statement|payment due|amount due|balance due|your (bill|invoice|statement) is ready|new statement)"
       },
+      "tags": {"financial": 0.9, "action_required": 0.4},
       "extract": {
         "amount": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "regex": "\\$[\\d,]+\\.?\\d*"
         },
         "due_date": {
-          "source": [
-            "subject",
-            "snippet"
-          ],
+          "source": ["subject", "snippet"],
           "regex": "(?:due|by|before|pay by)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\d{1,2}/\\d{1,2}/\\d{2,4}|\\d+ days?)"
         },
         "provider": {
