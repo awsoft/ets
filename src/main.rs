@@ -1,11 +1,13 @@
+mod common;
 mod db;
 mod extractor;
 mod filter;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use std::collections::HashMap;
 use std::io::{self, Read};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 // ---------------------------------------------------------------------------
 // Path helpers
@@ -55,7 +57,8 @@ fn read_stdin() -> Result<String> {
 // ---------------------------------------------------------------------------
 
 #[derive(Parser)]
-#[command(name = "ets", about = "ETS — Email Token Saver", version = "1.3.0")]
+// Fix 3: version comes from Cargo.toml via env!("CARGO_PKG_VERSION") — no hardcoding
+#[command(name = "ets", about = "ETS — Email Token Saver", version = env!("CARGO_PKG_VERSION"))]
 struct Cli {
     /// Path to email_rules.json
     #[arg(long, env = "ETS_RULES_PATH")]
@@ -109,31 +112,21 @@ enum Commands {
 }
 
 // ---------------------------------------------------------------------------
-// DB write helper — explicit join, no sleep hack
+// DB write helper — synchronous, no pointless thread overhead (Fix 4)
 // ---------------------------------------------------------------------------
 
-fn record_run_in_thread(
-    db_path: PathBuf,
-    filter_output: &serde_json::Value,
-    rule_hits: std::collections::HashMap<String, usize>,
-) {
-    let stats = filter_output["stats"].clone();
-    // Spawn thread and join immediately — ensures DB write completes before
-    // process exits, replacing the time.sleep(0.05) hack in the Python version.
-    std::thread::spawn(move || {
-        if let Ok(conn) = db::open(&db_path) {
-            let _ = db::record_run(
-                &conn,
-                stats["total"].as_u64().unwrap_or(0) as usize,
-                stats["passed"].as_u64().unwrap_or(0) as usize,
-                stats["blocked"].as_u64().unwrap_or(0) as usize,
-                stats["uncertain"].as_u64().unwrap_or(0) as usize,
-                &rule_hits,
-            );
-        }
-    })
-    .join()
-    .ok();
+fn record_run(db_path: &Path, filter_output: &serde_json::Value, rule_hits: &HashMap<String, usize>) {
+    let stats = &filter_output["stats"];
+    if let Ok(conn) = db::open(db_path) {
+        let _ = db::record_run(
+            &conn,
+            stats["total"].as_u64().unwrap_or(0) as usize,
+            stats["passed"].as_u64().unwrap_or(0) as usize,
+            stats["blocked"].as_u64().unwrap_or(0) as usize,
+            stats["uncertain"].as_u64().unwrap_or(0) as usize,
+            rule_hits,
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -157,7 +150,7 @@ fn main() -> Result<()> {
             let raw = read_stdin()?;
             let emails: Vec<serde_json::Value> = serde_json::from_str(&raw)?;
             let (output, rule_hits) = engine.filter_batch(emails, explain);
-            record_run_in_thread(db_path, &output, rule_hits);
+            record_run(&db_path, &output, &rule_hits);
             println!("{}", serde_json::to_string(&output)?);
         }
 
@@ -182,7 +175,7 @@ fn main() -> Result<()> {
             let emails: Vec<serde_json::Value> = serde_json::from_str(&raw)?;
             let (filter_output, rule_hits) = filter_engine.filter_batch(emails, explain);
             let result = extract_engine.extract_batch(&filter_output, snippet_cap, explain);
-            record_run_in_thread(db_path, &filter_output, rule_hits);
+            record_run(&db_path, &filter_output, &rule_hits);
             println!("{}", serde_json::to_string(&result)?);
         }
 

@@ -7,6 +7,14 @@ use std::path::Path;
 
 const HARD_OVERRIDE_MIN_WEIGHT: i32 = 90;
 
+/// Action enum — replaces the previous `String` field to eliminate error-prone string comparisons.
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Action {
+    Allow,
+    Block,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct RulesFile {
     pub rules: Vec<Rule>,
@@ -15,7 +23,7 @@ pub struct RulesFile {
 #[derive(Debug, Deserialize, Clone)]
 pub struct Rule {
     pub id: String,
-    pub action: String, // "allow" | "block"
+    pub action: Action,
     pub weight: i32,
     #[serde(rename = "match")]
     pub match_criteria: MatchCriteria,
@@ -43,13 +51,12 @@ pub struct RuleEngine {
     allow_senders: Vec<(String, i32, String)>,
     block_senders: Vec<(String, i32, String)>,
 
-    // exact sender
-    allow_exact: Vec<(String, i32, String)>,
-    block_exact_set: HashSet<String>,
-    block_exact_list: Vec<(String, i32, String)>,
+    // O(1) exact sender lookup — HashMap<addr, (weight, rule_id)>
+    allow_exact_map: HashMap<String, (i32, String)>,
+    block_exact_map: HashMap<String, (i32, String)>,
 
     // (compiled_regex, weight, action, rule_id, field: "subject"|"body")
-    regex_rules: Vec<(Regex, i32, String, String, String)>,
+    regex_rules: Vec<(Regex, i32, Action, String, String)>,
 
     pub threshold_block: i32,
     pub threshold_allow: i32,
@@ -67,9 +74,8 @@ impl RuleEngine {
             block_domain_map: HashMap::new(),
             allow_senders: Vec::new(),
             block_senders: Vec::new(),
-            allow_exact: Vec::new(),
-            block_exact_set: HashSet::new(),
-            block_exact_list: Vec::new(),
+            allow_exact_map: HashMap::new(),
+            block_exact_map: HashMap::new(),
             regex_rules: Vec::new(),
             threshold_block,
             threshold_allow,
@@ -77,14 +83,14 @@ impl RuleEngine {
         };
 
         for rule in &file.rules {
-            let action = rule.action.as_str();
+            let action = rule.action;
             let weight = rule.weight;
             let id = rule.id.clone();
             let m = &rule.match_criteria;
 
             if let Some(domain) = &m.sender_domain {
                 let d = domain.to_lowercase();
-                if action == "allow" {
+                if action == Action::Allow {
                     engine.allow_domain_map.insert(d, (weight, id.clone()));
                 } else {
                     engine.block_domain_map.insert(d, (weight, id.clone()));
@@ -92,7 +98,7 @@ impl RuleEngine {
             }
             if let Some(sub) = &m.sender_contains {
                 let s = sub.to_lowercase();
-                if action == "allow" {
+                if action == Action::Allow {
                     engine.allow_senders.push((s, weight, id.clone()));
                 } else {
                     engine.block_senders.push((s, weight, id.clone()));
@@ -100,11 +106,10 @@ impl RuleEngine {
             }
             if let Some(exact) = &m.sender_exact {
                 let e = exact.to_lowercase();
-                if action == "allow" {
-                    engine.allow_exact.push((e, weight, id.clone()));
+                if action == Action::Allow {
+                    engine.allow_exact_map.insert(e, (weight, id.clone()));
                 } else {
-                    engine.block_exact_set.insert(e.clone());
-                    engine.block_exact_list.push((e, weight, id.clone()));
+                    engine.block_exact_map.insert(e, (weight, id.clone()));
                 }
             }
             for (field, regex_str) in [
@@ -116,7 +121,7 @@ impl RuleEngine {
                         Ok(re) => engine.regex_rules.push((
                             re,
                             weight,
-                            action.to_string(),
+                            action,
                             id.clone(),
                             field.to_string(),
                         )),
@@ -126,22 +131,6 @@ impl RuleEngine {
             }
         }
         Ok(engine)
-    }
-
-    /// Extract the domain portion of an email address.
-    /// Handles both "addr@domain" and "Name <addr@domain>" formats.
-    fn extract_domain(addr: &str) -> &str {
-        // Strip angle-bracket wrapping first
-        let inner = if let (Some(s), Some(e)) = (addr.find('<'), addr.rfind('>')) {
-            addr[s + 1..e].trim()
-        } else {
-            addr.trim()
-        };
-        if let Some(at) = inner.rfind('@') {
-            &inner[at + 1..]
-        } else {
-            ""
-        }
     }
 
     /// Score a single email. Never panics — malformed fields yield empty strings.
@@ -173,7 +162,8 @@ impl RuleEngine {
             from.trim().to_string()
         };
 
-        let domain = Self::extract_domain(&from).to_lowercase();
+        // Use shared common::extract_domain; `from` is already lowercased
+        let domain = crate::common::extract_domain(&from).to_string();
         let sender_search = format!("{} {}", parsed_addr, from_name);
 
         let mut score: i32 = 0;
@@ -195,22 +185,16 @@ impl RuleEngine {
             }
         }
 
-        // Exact sender checks
-        if self.block_exact_set.contains(&parsed_addr) {
-            for (addr, w, id) in &self.block_exact_list {
-                if *addr == parsed_addr {
-                    score -= w;
-                    matched.push(id.clone());
-                }
-            }
+        // Exact sender checks — O(1) via HashMap
+        if let Some((w, id)) = self.block_exact_map.get(&parsed_addr) {
+            score -= w;
+            matched.push(id.clone());
         }
-        for (addr, w, id) in &self.allow_exact {
-            if *addr == parsed_addr {
-                score += w;
-                matched.push(id.clone());
-                if *w >= HARD_OVERRIDE_MIN_WEIGHT {
-                    hard_allow = true;
-                }
+        if let Some((w, id)) = self.allow_exact_map.get(&parsed_addr) {
+            score += w;
+            matched.push(id.clone());
+            if *w >= HARD_OVERRIDE_MIN_WEIGHT {
+                hard_allow = true;
             }
         }
 
@@ -235,7 +219,7 @@ impl RuleEngine {
         for (re, w, action, id, field) in &self.regex_rules {
             let text = if field == "subject" { subject } else { snippet };
             if re.is_match(text) {
-                if action == "allow" {
+                if *action == Action::Allow {
                     score += w;
                     matched.push(id.clone());
                     if *w >= HARD_OVERRIDE_MIN_WEIGHT {

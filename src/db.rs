@@ -46,22 +46,27 @@ pub fn record_run(
     uncertain: usize,
     hits: &HashMap<String, usize>,
 ) -> Result<()> {
+    let tx = conn.unchecked_transaction()?;
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)?
         .as_secs_f64();
-    conn.execute(
+
+    tx.execute(
         "INSERT INTO filter_runs (timestamp, total, passed, blocked, uncertain) VALUES (?1,?2,?3,?4,?5)",
         params![now, total as i64, passed as i64, blocked as i64, uncertain as i64],
     )?;
+
     for (rule_id, count) in hits {
         if *count > 0 {
-            conn.execute(
+            tx.execute(
                 "INSERT INTO rule_hits (rule_id, hit_count, last_hit) VALUES (?1, ?2, ?3)
                  ON CONFLICT(rule_id) DO UPDATE SET hit_count = hit_count + excluded.hit_count, last_hit = excluded.last_hit",
                 params![rule_id, *count as i64, now],
             )?;
         }
     }
+
+    tx.commit()?;
     Ok(())
 }
 
@@ -109,18 +114,20 @@ pub fn get_stats(conn: &Connection) -> Result<serde_json::Value> {
 }
 
 pub fn sync_rules(conn: &Connection, rule_ids: &[String]) -> Result<()> {
+    let tx = conn.unchecked_transaction()?;
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)?
         .as_secs_f64();
     for id in rule_ids {
-        conn.execute(
+        tx.execute(
             "INSERT OR IGNORE INTO rule_hits (rule_id, hit_count, last_hit) VALUES (?1, 0, ?2)",
             params![id, now],
         )?;
     }
-    conn.execute(
+    tx.execute(
         "INSERT OR REPLACE INTO meta (key, value) VALUES ('rules_synced_at', ?1)",
         params![now.to_string()],
     )?;
+    tx.commit()?;
     Ok(())
 }

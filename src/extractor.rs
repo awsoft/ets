@@ -4,6 +4,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::LazyLock;
 
 // ---------------------------------------------------------------------------
 // All recognised tag category names — used for normalisation/clamping
@@ -13,12 +14,34 @@ const TAG_CATEGORIES: &[&str] = &[
     "job", "kids", "travel", "marketing", "social", "newsletter",
 ];
 
-// Default tags for unclassified (no template matched)
-fn default_tags() -> HashMap<String, f64> {
+// Static regex compiled once for get_from_name (Fix 5)
+static FROM_NAME_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"^"?([^"<]+?)"?\s*<"#).unwrap()
+});
+
+// Static default tags for unclassified (no template matched) — cloned when needed (Fix 11)
+static DEFAULT_TAGS: LazyLock<HashMap<String, f64>> = LazyLock::new(|| {
     let mut m = HashMap::new();
     m.insert("personal".to_string(), 0.3);
     m.insert("action_required".to_string(), 0.2);
     m
+});
+
+// ---------------------------------------------------------------------------
+// UTF-8-safe truncation helper (Fix 1)
+// ---------------------------------------------------------------------------
+
+/// Truncate `s` to at most `max_bytes` bytes without splitting a UTF-8 character.
+fn safe_truncate(s: &str, max_bytes: usize) -> &str {
+    if max_bytes >= s.len() {
+        return s;
+    }
+    // Walk backwards from max_bytes to find a char boundary
+    let mut end = max_bytes;
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    &s[..end]
 }
 
 // ---------------------------------------------------------------------------
@@ -188,19 +211,12 @@ impl TemplateEngine {
     // Helpers
     // ------------------------------------------------------------------
 
+    /// Delegate to shared common::extract_domain and return owned String.
     fn get_domain(from: &str) -> String {
-        let addr = if let (Some(s), Some(e)) = (from.find('<'), from.rfind('>')) {
-            from[s + 1..e].trim()
-        } else {
-            from.trim()
-        };
-        if let Some(at) = addr.rfind('@') {
-            addr[at + 1..].to_lowercase()
-        } else {
-            String::new()
-        }
+        crate::common::extract_domain(from).to_string()
     }
 
+    /// Extract display name from email. Uses a module-level compiled regex (Fix 5).
     fn get_from_name(email: &Value) -> String {
         if let Some(name) = email.get("from_name").and_then(|v| v.as_str()) {
             let t = name.trim();
@@ -209,10 +225,8 @@ impl TemplateEngine {
             }
         }
         let from = email.get("from").and_then(|v| v.as_str()).unwrap_or("");
-        if let Ok(re) = Regex::new(r#"^"?([^"<]+?)"?\s*<"#) {
-            if let Some(cap) = re.captures(from) {
-                return cap[1].trim().to_string();
-            }
+        if let Some(cap) = FROM_NAME_RE.captures(from) {
+            return cap[1].trim().to_string();
         }
         let local = from.split('@').next().unwrap_or(from);
         local.replace(['.', '_', '-'], " ")
@@ -228,6 +242,8 @@ impl TemplateEngine {
         }
     }
 
+    /// Check whether an email matches a template's detect rules.
+    /// Uses u8 counters instead of Vec<bool> allocation (Fix 6).
     fn matches_detect(&self, ct: &CompiledTemplate, email: &Value) -> bool {
         let detect = &ct.template.detect;
         let any_mode = detect.any.unwrap_or(false);
@@ -236,25 +252,28 @@ impl TemplateEngine {
         let subject = email.get("subject").and_then(|v| v.as_str()).unwrap_or("");
         let snippet = email.get("snippet").and_then(|v| v.as_str()).unwrap_or("");
 
-        let mut checks: Vec<bool> = Vec::new();
+        let mut total: u8 = 0;
+        let mut pass: u8 = 0;
 
         if let Some(d) = &detect.sender_domain {
-            checks.push(domain == d.to_lowercase());
+            total += 1;
+            if domain == d.to_lowercase() { pass += 1; }
         }
         if let Some(sub) = &detect.sender_contains {
-            checks.push(from.contains(&sub.to_lowercase()));
+            total += 1;
+            if from.contains(&sub.to_lowercase()) { pass += 1; }
         }
         if let Some(re) = &ct.subject_re {
-            checks.push(re.is_match(subject));
+            total += 1;
+            if re.is_match(subject) { pass += 1; }
         }
         if let Some(re) = &ct.snippet_re {
-            checks.push(re.is_match(snippet));
+            total += 1;
+            if re.is_match(snippet) { pass += 1; }
         }
 
-        if checks.is_empty() {
-            return true;
-        }
-        if any_mode { checks.iter().any(|&b| b) } else { checks.iter().all(|&b| b) }
+        if total == 0 { return true; }
+        if any_mode { pass > 0 } else { pass == total }
     }
 
     fn apply_field(
@@ -293,8 +312,9 @@ impl TemplateEngine {
                 if let Some(re) = ct.field_regexes.get(field_name) {
                     if let Some(caps) = re.captures(text) {
                         let val = caps.get(1).or_else(|| caps.get(0)).map(|m| m.as_str().trim())?;
+                        // Fix 1: use safe_truncate to avoid splitting multi-byte UTF-8 chars
                         let val = if let Some(max) = max_chars {
-                            &val[..val.len().min(max)]
+                            safe_truncate(val, max)
                         } else {
                             val
                         };
@@ -315,8 +335,9 @@ impl TemplateEngine {
 
             if !has_regex && !has_enum {
                 if let Some(max) = max_chars {
+                    // Fix 1: safe_truncate guards against mid-char byte slicing
                     return Some(Value::String(
-                        text[..text.len().min(max)].trim().to_string(),
+                        safe_truncate(text, max).trim().to_string(),
                     ));
                 }
             }
@@ -404,7 +425,8 @@ impl TemplateEngine {
 
                 let mut matched_template: Option<&str> = None;
                 let mut email_type = "unclassified";
-                let mut base_tags: HashMap<String, f64> = default_tags();
+                // Clone from static DEFAULT_TAGS (Fix 11)
+                let mut base_tags: HashMap<String, f64> = DEFAULT_TAGS.clone();
                 let mut extracted = serde_json::Map::new();
 
                 for ct in &self.templates {
@@ -426,7 +448,8 @@ impl TemplateEngine {
                 let final_tags = self.compute_tags(email, &base_tags);
                 let (policy, tag_cap) = Self::snippet_policy(&final_tags);
 
-                // Apply snippet: tag policy cap, bounded by caller's snippet_cap for full
+                // Apply snippet: tag policy cap, bounded by caller's snippet_cap for full.
+                // Fix 1: use safe_truncate to prevent panics on multi-byte UTF-8 text.
                 let final_snippet: Value = if policy == "omitted" {
                     Value::Null
                 } else {
@@ -438,8 +461,7 @@ impl TemplateEngine {
                     if snippet.is_empty() {
                         Value::Null
                     } else {
-                        let end = snippet.len().min(cap);
-                        Value::String(snippet[..end].to_string())
+                        Value::String(safe_truncate(snippet, cap).to_string())
                     }
                 };
 

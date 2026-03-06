@@ -1,5 +1,5 @@
 /**
- * ETS — Email Token Saver v1.3.0  (@awsoft/ets)
+ * ETS — Email Token Saver v1.4.0  (@awsoft/ets)
  * OpenClaw plugin: wraps the Rust `ets` binary.
  *
  * Runtime: bin/ets (Rust — compiled at install via postinstall script)
@@ -32,7 +32,14 @@ const DEFAULT_RULES_PATH = path.join(PLUGIN_DIR, "email_rules.json");
 const DEFAULT_DB_PATH = path.join(os.homedir(), ".openclaw", "ets", "ets.db");
 const DEFAULT_TEMPLATES_PATH = path.join(PLUGIN_DIR, "extractor_templates.json");
 
-const PLUGIN_VERSION = "1.3.0";
+const PLUGIN_VERSION: string = (() => {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(PLUGIN_DIR, "package.json"), "utf8"));
+    return pkg.version ?? "1.4.0";
+  } catch {
+    return "1.4.0";
+  }
+})();
 
 // ---------------------------------------------------------------------------
 // Binary helpers
@@ -75,7 +82,7 @@ function runEts(
   const mergedEnv = { ...process.env, ...env };
   const result = spawnSync(
     BINARY_PATH,
-    ["--rules", rulesPathResolved, "--db", dbPathResolved, ...args],
+    ["--rules", rulesPathResolved, "--db", dbPathResolved, "--templates", templatesPathResolved, ...args],
     { input, encoding: "utf8", env: mergedEnv, maxBuffer: 50 * 1024 * 1024 }
   );
   return {
@@ -171,6 +178,7 @@ function loadTemplates(templatesPath: string): TemplatesFile {
 // ---------------------------------------------------------------------------
 let rulesPathResolved: string = DEFAULT_RULES_PATH;
 let dbPathResolved: string = DEFAULT_DB_PATH;
+let templatesPathResolved: string = DEFAULT_TEMPLATES_PATH;
 
 export default function register(api: any): void {
   const cfg: Record<string, any> =
@@ -182,7 +190,7 @@ export default function register(api: any): void {
   dbPathResolved = cfg.dbPath
     ? path.resolve(String(cfg.dbPath).replace(/^~/, os.homedir()))
     : DEFAULT_DB_PATH;
-  const templatesPath: string = cfg.templatesPath
+  templatesPathResolved = cfg.templatesPath
     ? path.resolve(String(cfg.templatesPath).replace(/^~/, os.homedir()))
     : DEFAULT_TEMPLATES_PATH;
 
@@ -313,8 +321,7 @@ export default function register(api: any): void {
 
       const { stdout, stderr, status } = runEts(
         args,
-        JSON.stringify(filterOutput),
-        { ETS_SNIPPET_CAP: String(snippetCap) }
+        JSON.stringify(filterOutput)
       );
 
       if (status !== 0) {
@@ -540,13 +547,13 @@ export default function register(api: any): void {
         }
       }
 
-      const data = loadTemplates(templatesPath);
+      const data = loadTemplates(templatesPathResolved);
       if (data.templates.some((t: ExtractorTemplate) => t.id === template.id)) {
         throw new Error(`Template with id '${template.id}' already exists.`);
       }
 
       data.templates.push(template);
-      fs.writeFileSync(templatesPath, JSON.stringify(data, null, 2), "utf8");
+      fs.writeFileSync(templatesPathResolved, JSON.stringify(data, null, 2), "utf8");
 
       const result = {
         success: true,
@@ -581,7 +588,7 @@ export default function register(api: any): void {
         const blockCount = rulesData.rules.filter((r: Rule) => r.action === "block").length;
         let templateCount = 0;
         try {
-          const tmplData = loadTemplates(templatesPath);
+          const tmplData = loadTemplates(templatesPathResolved);
           templateCount = tmplData.templates.length;
         } catch (_) {}
 
@@ -606,7 +613,7 @@ export default function register(api: any): void {
       if (sub === "version") {
         let templateCount = 0;
         try {
-          const tmplData = loadTemplates(templatesPath);
+          const tmplData = loadTemplates(templatesPathResolved);
           templateCount = tmplData.templates.length;
         } catch (_) {}
         return (
