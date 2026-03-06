@@ -2,57 +2,142 @@
   "_meta": {
     "snippet_cap": 300,
     "pipeline": ["filter", "extract"],
-    "version": 1
+    "version": 2,
+    "description": "ETS default rules - generic, applies to any user. Add personal rules via ets_add_rule or a local overrides file."
   },
   "rules": [
-    {
-      "id": "block-weekly-newsletters",
-      "action": "block",
-      "weight": 80,
-      "match": { "subject_regex": "(?i)(this week at|weekly newsletter|weekly update|weekly digest|this month at|monthly newsletter|monthly update)" },
-      "reason": "Generic weekly/monthly digest emails"
-    },
     {
       "id": "block-shipping-notifications",
       "action": "block",
       "weight": 90,
-      "match": { "subject_regex": "(?i)(has shipped|out for delivery|order delivered|your package|delivery update|shipment (update|confirmation)|delivered today|arriving today|arriving tomorrow)" },
-      "reason": "Automated shipping/delivery notifications"
-    },
-    {
-      "id": "block-promotional",
-      "action": "block",
-      "weight": 70,
-      "match": { "subject_regex": "(?i)(\\d+% off|flash sale|limited.time offer|exclusive deal|promo code|use code|shop now|don.t miss|last chance|deal alert|ends tonight|ends sunday|save up to|buy now)" },
-      "reason": "Promotional and marketing emails"
+      "match": { "subject_regex": "(?i)(has shipped|out for delivery|order delivered|your package|delivery update|shipment (update|confirmation|notification)|delivered today|arriving today|arriving tomorrow|expected delivery|package picked up|in transit)" },
+      "reason": "Automated shipping/delivery status updates"
     },
     {
       "id": "block-order-confirmations",
       "action": "block",
       "weight": 85,
-      "match": { "subject_regex": "(?i)(order (confirmed|received|#\\d)|thank you for (your order|shopping with us))" },
-      "reason": "Order confirmation receipts - not actionable"
+      "match": { "subject_regex": "(?i)(order (confirmed|received|placed|#\\d+)|thank you for (your order|shopping|your purchase)|your receipt from|purchase confirmation|payment received)" },
+      "reason": "Order/purchase confirmation receipts"
+    },
+    {
+      "id": "block-promotional",
+      "action": "block",
+      "weight": 75,
+      "match": { "subject_regex": "(?i)(\\d+% off|flash sale|limited.time offer|exclusive (deal|offer|access)|promo code|use code|shop now|don.t miss|last chance|deal alert|ends (tonight|sunday|today|soon)|save up to|buy now|new arrivals|back in stock|clearance|markdown|doorbusters)" },
+      "reason": "Promotional and marketing emails"
+    },
+    {
+      "id": "block-weekly-digests",
+      "action": "block",
+      "weight": 80,
+      "match": { "subject_regex": "(?i)(this week (at|in|on)|weekly (newsletter|digest|update|roundup|recap|summary)|monthly (newsletter|digest|update|roundup|recap|summary)|your (weekly|monthly|daily) (digest|summary|recap|update)|top stories|what.s new this week)" },
+      "reason": "Periodic digest and newsletter emails"
     },
     {
       "id": "block-social-digests",
       "action": "block",
       "weight": 75,
-      "match": { "subject_regex": "(?i)(people you may know|suggested for you|trending (now|today)|top (posts|stories|updates)|see what.s new|activity digest|notification digest)" },
-      "reason": "Social platform digest emails"
+      "match": { "subject_regex": "(?i)(people you may know|suggested for you|trending (now|today)|top (posts|stories|updates) (for you|this week)|see what.s new|activity digest|notification digest|your connections|new connections|X people (viewed|liked|shared)|\\d+ (new notifications|people viewed your profile))" },
+      "reason": "Social platform digest/recommendation emails"
+    },
+    {
+      "id": "block-linkedin-digests",
+      "action": "block",
+      "weight": 80,
+      "match": { "subject_regex": "(?i)(your linkedin (weekly|daily)|people are looking at your|jobs you may be interested|\\d+ people viewed your linkedin|linkedin news|catch up on linkedin|new (jobs|posts) for you on linkedin)" },
+      "reason": "LinkedIn digest and recommendation emails (not direct recruiter messages)"
+    },
+    {
+      "id": "block-subscription-auto-notices",
+      "action": "block",
+      "weight": 65,
+      "match": { "subject_regex": "(?i)(subscription (renewed|auto-renewed|has been renewed)|your (annual|monthly) (subscription|membership) (has been|was) (renewed|charged|billed)|auto-renewal (confirmation|notice|processed))" },
+      "reason": "Routine subscription auto-renewal confirmations (not upcoming warnings)"
+    },
+    {
+      "id": "block-survey-requests",
+      "action": "block",
+      "weight": 70,
+      "match": { "subject_regex": "(?i)(share your (feedback|experience|opinion|thoughts)|how (did we do|was your experience|are we doing)|rate your (experience|visit|purchase|order)|quick survey|take our (survey|poll)|we.d love your feedback|tell us what you think)" },
+      "reason": "Survey and feedback request emails"
+    },
+    {
+      "id": "block-onboarding-welcome",
+      "action": "block",
+      "weight": 60,
+      "match": { "subject_regex": "(?i)(welcome to |get started with |your account is ready|activate your account|confirm your (email|account)|you.re in|thanks for (signing up|joining|registering)|complete your (profile|setup|registration))" },
+      "reason": "Onboarding and welcome emails from new service signups"
+    },
+    {
+      "id": "block-amazon-routine",
+      "action": "block",
+      "weight": 85,
+      "match": { "sender_domain": "amazon.com", "subject_regex": "(?i)(your order|has shipped|delivery|receipt|invoice|prime renewal|recommendations|deals for you|daily deals)" },
+      "reason": "Routine Amazon order/shipping/promo emails"
+    },
+    {
+      "id": "block-unsubscribe-confirms",
+      "action": "block",
+      "weight": 90,
+      "match": { "subject_regex": "(?i)(you.ve been unsubscribed|unsubscribe (confirmed|successful)|you.re unsubscribed|removed from|successfully unsubscribed)" },
+      "reason": "Unsubscribe confirmation emails"
+    },
+    {
+      "id": "block-fundraising-political",
+      "action": "block",
+      "weight": 70,
+      "match": { "subject_regex": "(?i)(donate (now|today)|urgent: (donate|match|deadline)|matching (gift|donation|deadline)|we need your (help|support) (today|now|urgently)|double your (impact|donation)|give (today|now)|chip in)" },
+      "reason": "Fundraising and political donation solicitations"
+    },
+    {
+      "id": "block-event-generic-marketing",
+      "action": "block",
+      "weight": 65,
+      "match": { "subject_regex": "(?i)(register (now|today) for|free (webinar|workshop|event|demo)|join us (for|on|at)|you.re invited to (join|attend|our) (webinar|workshop|event|demo|summit))" },
+      "reason": "Generic marketing event invitations"
     },
     {
       "id": "allow-financial-security",
       "action": "allow",
       "weight": 100,
-      "match": { "subject_regex": "(?i)(fraud alert|unusual (activity|sign.in)|account (locked|suspended|compromised|disabled)|security alert|payment (failed|declined)|wire transfer|verify your (identity|account)|suspicious)" },
-      "reason": "Financial and security alerts - always important"
+      "match": { "subject_regex": "(?i)(fraud (alert|detected)|unusual (activity|sign.in|login)|account (locked|suspended|compromised|disabled|restricted)|security (alert|notice|warning)|payment (failed|declined|past due)|wire transfer|verify your (identity|account)|suspicious (activity|transaction|login)|unauthorized)" },
+      "reason": "Financial and security alerts - critical, always pass"
     },
     {
-      "id": "allow-job-search",
+      "id": "allow-job-milestones",
       "action": "allow",
       "weight": 95,
-      "match": { "subject_regex": "(?i)(offer letter|interview (invitation|request|scheduled|confirmed)|we.d like to (speak|connect|discuss|interview)|application (status update|decision|moved forward))" },
-      "reason": "Job search milestone emails - always flag"
+      "match": { "subject_regex": "(?i)(offer letter|we.d like to (offer|extend an offer)|interview (invitation|request|scheduled|confirmed|tomorrow|today)|we.d like to (speak|connect|discuss|interview) with you|application (moved forward|advancing|selected|decision|next steps)|congratulations.*(offer|position|role))" },
+      "reason": "Job search milestone emails - offers, interviews, decisions"
+    },
+    {
+      "id": "allow-upcoming-subscription-warning",
+      "action": "allow",
+      "weight": 80,
+      "match": { "subject_regex": "(?i)(subscription (expiring|expires|will (renew|expire|end)|ending)|your (trial|subscription|membership) (ends|expires|is expiring) (soon|in \\d+|tomorrow|today)|upcoming (renewal|charge|payment)|cancel (before|by|anytime))" },
+      "reason": "Upcoming subscription expiry warnings - actionable"
+    },
+    {
+      "id": "allow-legal-documents",
+      "action": "allow",
+      "weight": 90,
+      "match": { "subject_regex": "(?i)(terms of service (update|change)|privacy policy (update|change)|legal (notice|update|document)|service (agreement|update|change) (notice|effective)|updated (terms|policy|agreement)|important (changes|updates) to your (account|terms|service))" },
+      "reason": "Legal notices and TOS/privacy policy changes"
+    },
+    {
+      "id": "allow-account-access-alert",
+      "action": "allow",
+      "weight": 90,
+      "match": { "subject_regex": "(?i)(new (sign.in|login|device) (detected|to your account)|someone (signed in|logged in|accessed your account)|sign.in from (new|unknown|unrecognized) (device|location|browser))" },
+      "reason": "New login/device alerts - security relevant"
+    },
+    {
+      "id": "allow-payment-action-required",
+      "action": "allow",
+      "weight": 85,
+      "match": { "subject_regex": "(?i)(payment (action required|overdue|past due|is due|required)|invoice (due|overdue|past due)|amount (due|overdue|past due)|balance (due|overdue)|bill (due|overdue|past due)|your (bill|payment) is (due|overdue|past due))" },
+      "reason": "Payment due / overdue notices - actionable"
     }
   ]
 }

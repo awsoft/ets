@@ -2,7 +2,7 @@
   "id": "ets",
   "name": "ETS \u2014 Email Token Saver",
   "description": "Rules-based email pre-filter. Strips noise before LLM sees it.",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
