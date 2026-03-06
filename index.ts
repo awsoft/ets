@@ -31,7 +31,8 @@ const DEFAULT_DB_PATH = path.join(os.homedir(), ".openclaw", "ets", "ets.db");
 const FILTER_SCRIPT = path.join(PLUGIN_DIR, "email_filter.py");
 const EXTRACTOR_SCRIPT = path.join(PLUGIN_DIR, "email_extractor.py");
 
-const PLUGIN_VERSION = "1.0.0";
+const PLUGIN_VERSION = "1.1.0";
+const DEFAULT_TEMPLATES_PATH = path.join(PLUGIN_DIR, "extractor_templates.json");
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -121,6 +122,25 @@ function parseFilterOutput(stdout: string): FilterResult {
 
 function loadRules(rulesPath: string): { version: number; rules: Rule[] } {
   const raw = fs.readFileSync(rulesPath, "utf8");
+  return JSON.parse(raw);
+}
+
+interface ExtractorTemplate {
+  id: string;
+  name: string;
+  priority: number;
+  type: string;
+  detect: Record<string, unknown>;
+  extract: Record<string, unknown>;
+}
+
+interface TemplatesFile {
+  _meta: Record<string, unknown>;
+  templates: ExtractorTemplate[];
+}
+
+function loadTemplates(templatesPath: string): TemplatesFile {
+  const raw = fs.readFileSync(templatesPath, "utf8");
   return JSON.parse(raw);
 }
 
@@ -447,6 +467,96 @@ export default function register(api: any): void {
   });
 
   // -------------------------------------------------------------------------
+  // Tool: ets_add_extractor
+  // -------------------------------------------------------------------------
+  api.registerTool({
+    name: "ets_add_extractor",
+    description:
+      "Add a new email extraction template to ETS. Use this to teach ETS how to extract " +
+      "structured data from a new email type or sender. Templates are matched in priority order " +
+      "(highest first). Site-specific extractors should have priority >= 100; generic type " +
+      "extractors should use priority 50-99.",
+    parameters: {
+      type: "object",
+      properties: {
+        template: {
+          type: "object",
+          description:
+            "Full template object. Required fields: id (snake_case), name, priority (integer), " +
+            "type (shipping|order_confirm|billing|job|financial_alert|calendar_invite|subscription|travel|unclassified), " +
+            "detect (at least one rule: sender_domain|sender_contains|subject_regex|snippet_regex), " +
+            "extract (at least one field with static|regex|enum_map).",
+        },
+        validate: {
+          type: "boolean",
+          description: "Validate required fields before writing (default: true).",
+          default: true,
+        },
+      },
+      required: ["template"],
+    },
+    handler: async (params: { template: ExtractorTemplate; validate?: boolean }) => {
+      const { template, validate = true } = params;
+      const templatesPath = DEFAULT_TEMPLATES_PATH;
+
+      if (validate) {
+        // Required top-level fields
+        for (const field of ["id", "name", "priority", "type", "detect", "extract"]) {
+          if (!(field in template)) {
+            throw new Error(`Missing required field: ${field}`);
+          }
+        }
+
+        // id must be snake_case
+        if (!/^[a-z0-9][a-z0-9\-_]*$/.test(template.id)) {
+          throw new Error("Template id must be snake_case or kebab-case (lowercase letters, numbers, hyphens, underscores)");
+        }
+
+        // Valid types
+        const validTypes = ["shipping", "order_confirm", "billing", "job", "financial_alert",
+          "calendar_invite", "subscription", "travel", "school_notice", "unclassified"];
+        if (!validTypes.includes(template.type)) {
+          throw new Error(`Invalid type '${template.type}'. Valid types: ${validTypes.join(", ")}`);
+        }
+
+        // detect must have at least one rule
+        const detectKeys = ["sender_domain", "sender_contains", "subject_regex", "snippet_regex"];
+        const hasDetect = detectKeys.some(k => k in (template.detect || {}));
+        if (!hasDetect) {
+          throw new Error(`detect must have at least one rule: ${detectKeys.join(", ")}`);
+        }
+
+        // extract must have at least one field
+        if (!template.extract || Object.keys(template.extract).length === 0) {
+          throw new Error("extract must have at least one field");
+        }
+
+        // priority must be a positive integer
+        if (typeof template.priority !== "number" || template.priority < 1) {
+          throw new Error("priority must be a positive integer");
+        }
+      }
+
+      const data = loadTemplates(templatesPath);
+
+      // Check for duplicate id
+      if (data.templates.some((t: ExtractorTemplate) => t.id === template.id)) {
+        throw new Error(`Template with id '${template.id}' already exists. Use a different id.`);
+      }
+
+      data.templates.push(template);
+      fs.writeFileSync(templatesPath, JSON.stringify(data, null, 2), "utf8");
+
+      return {
+        success: true,
+        template_id: template.id,
+        total_templates: data.templates.length,
+        message: `Template '${template.id}' added successfully. ETS will use it on the next extraction run.`,
+      };
+    },
+  });
+
+  // -------------------------------------------------------------------------
   // Slash command: /ets [stats|rules|version|pipeline]
   // -------------------------------------------------------------------------
   api.registerCommand({
@@ -460,20 +570,29 @@ export default function register(api: any): void {
         const data = loadRules(rulesPath) as any;
         const meta = data._meta ?? {};
         const snippetCap: number = meta.snippet_cap ?? 300;
-        const pipeline: string[] = meta.pipeline ?? ["filter"];
+        const pipeline: string[] = meta.pipeline ?? ["filter", "extract"];
         const pipelineStr = pipeline.map((s: string, i: number) => `${i + 1}. **${s}**`).join(" → ");
         const rulesData = data.rules ?? [];
         const allowCount = rulesData.filter((r: Rule) => r.action === "allow").length;
         const blockCount = rulesData.filter((r: Rule) => r.action === "block").length;
+
+        let templateCount = 0;
+        try {
+          const tmplData = loadTemplates(DEFAULT_TEMPLATES_PATH);
+          templateCount = tmplData.templates.length;
+        } catch (_) {}
+
         return [
-          `**ETS Pipeline Config** (v${meta.version ?? 1})`,
+          `**ETS Pipeline Config** (v${PLUGIN_VERSION})`,
           ``,
           `**Pipeline stages:** ${pipelineStr}`,
           `**Filter rules:** ${rulesData.length} total (${allowCount} allow, ${blockCount} block)`,
+          `**Extractor templates:** ${templateCount} loaded`,
           `**Snippet cap:** ${snippetCap} chars (financial alerts: unlimited)`,
           `**Thresholds:** block ≤ ${thresholdBlock}, allow ≥ ${thresholdAllow}`,
           ``,
           `**Rules path:** \`${rulesPath}\``,
+          `**Templates path:** \`${DEFAULT_TEMPLATES_PATH}\``,
           `**DB path:** \`${dbPath}\``,
           `**Filter script:** \`${FILTER_SCRIPT}\``,
           `**Extractor script:** \`${EXTRACTOR_SCRIPT}\``,
@@ -482,8 +601,14 @@ export default function register(api: any): void {
 
       if (sub === "version") {
         const data = loadRules(rulesPath);
+        let templateCount = 0;
+        try {
+          const tmplData = loadTemplates(DEFAULT_TEMPLATES_PATH);
+          templateCount = tmplData.templates.length;
+        } catch (_) {}
         return `**ETS — Email Token Saver** v${PLUGIN_VERSION}\n` +
-               `Rules loaded: ${data.rules.length}\n` +
+               `Filter rules: ${data.rules.length}\n` +
+               `Extractor templates: ${templateCount}\n` +
                `Rules path: \`${rulesPath}\`\n` +
                `DB path: \`${dbPath}\``;
       }
@@ -545,6 +670,7 @@ export default function register(api: any): void {
       }
 
       return `Unknown subcommand: \`${sub}\`. Usage: \`/ets stats\` | \`/ets rules\` | \`/ets version\` | \`/ets pipeline\``;
+
     },
   });
 }

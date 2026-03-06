@@ -1,0 +1,733 @@
+{
+  "_meta": {
+    "version": 1,
+    "description": "ETS extraction templates. Each template defines how to detect an email type and what fields to extract. Templates are matched in priority order (highest first). Add new templates here or via the ets_add_extractor agent tool.",
+    "agent_instructions": "To add a new extractor template, use the ets_add_extractor tool or append an entry to this file following the schema below. Set a unique id, a descriptive name, detection rules, extraction patterns, and a priority (higher = matched first). Site-specific extractors (e.g. for Amazon, Walmart) should have priority >= 100. Generic type extractors should have priority 50-99."
+  },
+  "templates": [
+    {
+      "id": "amazon-shipping",
+      "name": "Amazon Shipping Update",
+      "priority": 110,
+      "type": "shipping",
+      "detect": {
+        "sender_domain": "amazon.com",
+        "subject_regex": "(?i)(shipped|out for delivery|delivered|arriving)"
+      },
+      "extract": {
+        "order_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?i)Order\\s*#?([A-Z0-9\\-]{10,})"
+        },
+        "status": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)out.?for.?delivery|on its way|with delivery driver": "out_for_delivery",
+            "(?i)\\bdelivered\\b|delivery complete|has been delivered": "delivered",
+            "(?i)arriving today": "arriving_today",
+            "(?i)\\bshipped\\b|has shipped|in transit": "shipped"
+          }
+        },
+        "estimated_delivery": {
+          "source": "snippet",
+          "regex": "(?i)(?:by|arriving|estimated delivery)[:\\s]+([A-Za-z]+ \\d+|\\w+day(?:,\\s*[A-Za-z]+ \\d+)?)"
+        },
+        "carrier": {
+          "static": "Amazon"
+        },
+        "item_hint": {
+          "source": "snippet",
+          "max_chars": 80
+        }
+      }
+    },
+    {
+      "id": "ups-shipping",
+      "name": "UPS Shipping Update",
+      "priority": 110,
+      "type": "shipping",
+      "detect": {
+        "sender_contains": "ups.com",
+        "subject_regex": "(?i)(shipped|out for delivery|delivered|arriving|pickup ready)"
+      },
+      "extract": {
+        "tracking_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(1Z[A-Z0-9]{16})"
+        },
+        "status": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)out.?for.?delivery|on its way": "out_for_delivery",
+            "(?i)\\bdelivered\\b|delivery complete": "delivered",
+            "(?i)pickup ready|ready for pickup": "pickup_ready",
+            "(?i)\\bshipped\\b|in transit|on the way": "shipped"
+          }
+        },
+        "estimated_delivery": {
+          "source": "snippet",
+          "regex": "(?i)(?:by|arriving|delivery date|scheduled delivery)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\w+day(?:,\\s*[A-Za-z]+ \\d+)?)"
+        },
+        "carrier": {
+          "static": "UPS"
+        }
+      }
+    },
+    {
+      "id": "fedex-shipping",
+      "name": "FedEx Shipping Update",
+      "priority": 110,
+      "type": "shipping",
+      "detect": {
+        "sender_contains": "fedex.com",
+        "subject_regex": "(?i)(shipped|out for delivery|delivered|arriving|exception)"
+      },
+      "extract": {
+        "tracking_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\b(\\d{12}|\\d{15}|\\d{20})\\b"
+        },
+        "status": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)out.?for.?delivery|on vehicle": "out_for_delivery",
+            "(?i)\\bdelivered\\b|delivery complete": "delivered",
+            "(?i)\\bexception\\b|delivery exception": "exception",
+            "(?i)\\bshipped\\b|in transit|picked up": "shipped"
+          }
+        },
+        "estimated_delivery": {
+          "source": "snippet",
+          "regex": "(?i)(?:by|scheduled|delivery date|estimated)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\w+day(?:,\\s*[A-Za-z]+ \\d+)?)"
+        },
+        "carrier": {
+          "static": "FedEx"
+        }
+      }
+    },
+    {
+      "id": "usps-shipping",
+      "name": "USPS Shipping Update",
+      "priority": 110,
+      "type": "shipping",
+      "detect": {
+        "sender_contains": "usps.com",
+        "subject_regex": "(?i)(shipped|out for delivery|delivered|arriving|in transit|pickup)"
+      },
+      "extract": {
+        "tracking_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\b(9[234]\\d{18,20}|[A-Z]{2}\\d{9}[A-Z]{2})\\b"
+        },
+        "status": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)out.?for.?delivery|out for post": "out_for_delivery",
+            "(?i)\\bdelivered\\b|delivery complete": "delivered",
+            "(?i)available for pickup|pickup": "pickup_ready",
+            "(?i)in transit|shipped|accepted": "shipped"
+          }
+        },
+        "estimated_delivery": {
+          "source": "snippet",
+          "regex": "(?i)(?:by|expected delivery|arriving)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\w+day(?:,\\s*[A-Za-z]+ \\d+)?)"
+        },
+        "carrier": {
+          "static": "USPS"
+        }
+      }
+    },
+    {
+      "id": "dhl-shipping",
+      "name": "DHL Shipping Update",
+      "priority": 110,
+      "type": "shipping",
+      "detect": {
+        "sender_contains": "dhl.com",
+        "subject_regex": "(?i)(shipped|out for delivery|delivered|arriving|transit)"
+      },
+      "extract": {
+        "tracking_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\b(\\d{10,11}|[A-Z]{3}\\d{7,})\\b"
+        },
+        "status": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)out.?for.?delivery|with courier": "out_for_delivery",
+            "(?i)\\bdelivered\\b|delivery complete": "delivered",
+            "(?i)in transit|transit|picked up": "shipped"
+          }
+        },
+        "estimated_delivery": {
+          "source": "snippet",
+          "regex": "(?i)(?:by|estimated|delivery date)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\w+day(?:,\\s*[A-Za-z]+ \\d+)?)"
+        },
+        "carrier": {
+          "static": "DHL"
+        }
+      }
+    },
+    {
+      "id": "walmart-shipping",
+      "name": "Walmart Shipping Update",
+      "priority": 110,
+      "type": "shipping",
+      "detect": {
+        "sender_domain": "walmart.com",
+        "subject_regex": "(?i)(shipped|out for delivery|delivered|arriving|pickup ready)"
+      },
+      "extract": {
+        "tracking_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:tracking[:\\s#]+|1Z)([A-Z0-9]{10,})"
+        },
+        "status": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)out.?for.?delivery|on its way": "out_for_delivery",
+            "(?i)\\bdelivered\\b|delivery complete": "delivered",
+            "(?i)ready for pickup|pickup ready": "pickup_ready",
+            "(?i)\\bshipped\\b|in transit|on the way": "shipped"
+          }
+        },
+        "estimated_delivery": {
+          "source": "snippet",
+          "regex": "(?i)(?:by|arriving|estimated)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\w+day(?:,\\s*[A-Za-z]+ \\d+)?)"
+        }
+      }
+    },
+    {
+      "id": "ebay-shipping",
+      "name": "eBay Shipping Update",
+      "priority": 110,
+      "type": "shipping",
+      "detect": {
+        "sender_domain": "ebay.com",
+        "subject_regex": "(?i)(shipped|out for delivery|delivered)"
+      },
+      "extract": {
+        "tracking_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:tracking[:\\s#]+|1Z)([A-Z0-9]{10,})"
+        },
+        "carrier": {
+          "source": [
+            "sender",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)ups\\.com|\\bUPS\\b|united.?parcel": "UPS",
+            "(?i)fedex\\.com|\\bFedEx\\b|federal.?express": "FedEx",
+            "(?i)usps\\.com|\\bUSPS\\b|postal.?service": "USPS",
+            "(?i)dhl\\.com|\\bDHL\\b": "DHL"
+          }
+        },
+        "status": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)out.?for.?delivery|on its way": "out_for_delivery",
+            "(?i)\\bdelivered\\b|delivery complete": "delivered",
+            "(?i)\\bshipped\\b|in transit": "shipped"
+          }
+        },
+        "estimated_delivery": {
+          "source": "snippet",
+          "regex": "(?i)(?:by|arriving|estimated)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\w+day(?:,\\s*[A-Za-z]+ \\d+)?)"
+        }
+      }
+    },
+    {
+      "id": "paypal-transaction",
+      "name": "PayPal Transaction Receipt",
+      "priority": 110,
+      "type": "billing",
+      "detect": {
+        "sender_domain": "paypal.com",
+        "subject_regex": "(?i)(receipt|payment|sent|received|charged|you paid|you received)"
+      },
+      "extract": {
+        "amount": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        },
+        "direction": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)you sent|you paid|payment sent": "sent",
+            "(?i)you received|payment received|money received": "received",
+            "(?i)you were charged|charged to": "charged"
+          }
+        },
+        "counterparty": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:to|from|with)\\s+([A-Za-z0-9 ]{2,40}?)(?:\\s+for|\\s+on|\\.|$)"
+        }
+      }
+    },
+    {
+      "id": "amazon-order",
+      "name": "Amazon Order Confirmation",
+      "priority": 105,
+      "type": "order_confirm",
+      "detect": {
+        "sender_domain": "amazon.com",
+        "subject_regex": "(?i)(order (confirmed|received|placed))"
+      },
+      "extract": {
+        "order_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?i)#([A-Z0-9\\-]{10,})"
+        },
+        "total": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        },
+        "item_hint": {
+          "source": "snippet",
+          "max_chars": 80
+        }
+      }
+    },
+    {
+      "id": "walmart-order",
+      "name": "Walmart Order Confirmation",
+      "priority": 105,
+      "type": "order_confirm",
+      "detect": {
+        "sender_domain": "walmart.com",
+        "subject_regex": "(?i)(order (confirmed|received|placed)|thank you for your order|your receipt)"
+      },
+      "extract": {
+        "order_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:order|#)\\s*([0-9\\-]{6,})"
+        },
+        "total": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        },
+        "item_hint": {
+          "source": "snippet",
+          "max_chars": 80
+        }
+      }
+    },
+    {
+      "id": "ebay-order",
+      "name": "eBay Order Confirmation",
+      "priority": 105,
+      "type": "order_confirm",
+      "detect": {
+        "sender_domain": "ebay.com",
+        "subject_regex": "(?i)(order|purchase|won|you bought)"
+      },
+      "extract": {
+        "order_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:order|item)\\s*#?(\\d{10,})"
+        },
+        "total": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        },
+        "seller": {
+          "source": "snippet",
+          "regex": "(?:from|seller:)\\s+([^\\n,]{2,40})"
+        },
+        "item_hint": {
+          "source": "snippet",
+          "max_chars": 80
+        }
+      }
+    },
+    {
+      "id": "stripe-receipt",
+      "name": "Stripe Payment Receipt",
+      "priority": 100,
+      "type": "billing",
+      "detect": {
+        "sender_contains": "stripe.com"
+      },
+      "extract": {
+        "amount": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        },
+        "merchant": {
+          "source": "from_name",
+          "max_chars": 40
+        },
+        "date": {
+          "source": "snippet",
+          "regex": "\\b(\\d{1,2}/\\d{1,2}/\\d{2,4}|[A-Za-z]+ \\d+,?\\s*\\d{4}|\\d{4}-\\d{2}-\\d{2})\\b"
+        }
+      }
+    },
+    {
+      "id": "github-notification",
+      "name": "GitHub Notification",
+      "priority": 100,
+      "type": "unclassified",
+      "detect": {
+        "sender_domain": "github.com",
+        "subject_regex": "(?i)(pull request|issue|review|mention|assigned)"
+      },
+      "extract": {
+        "repo": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "([a-zA-Z0-9_\\-]+/[a-zA-Z0-9_\\-]+)"
+        },
+        "action": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)mentioned you|@mention": "mentioned",
+            "(?i)assigned to you|you were assigned": "assigned",
+            "(?i)review requested|requested your review": "review_requested",
+            "(?i)commented on|left a comment": "commented",
+            "(?i)\\bopened\\b": "opened",
+            "(?i)\\bclosed\\b": "closed",
+            "(?i)\\bmerged\\b": "merged"
+          }
+        },
+        "pr_or_issue_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "#(\\d+)"
+        }
+      }
+    },
+    {
+      "id": "calendar-invite",
+      "name": "Calendar Invite",
+      "priority": 95,
+      "type": "calendar_invite",
+      "detect": {
+        "subject_regex": "(?i)(invited you to|invitation:|calendar invite|you.re invited|save the date)"
+      },
+      "extract": {
+        "event_name": {
+          "source": "subject",
+          "regex": "(?:invitation:|invited you to|you.re invited to|save the date:?)\\s*(.+)"
+        },
+        "date_hint": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:on|for|at)\\s+([A-Za-z]+ \\d+,?\\s*\\d{4}|(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\\w*,?\\s*[A-Za-z]+ \\d+)"
+        },
+        "time_hint": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\b(\\d{1,2}:\\d{2}\\s*(?:AM|PM|am|pm))\\b"
+        },
+        "location_hint": {
+          "source": "snippet",
+          "max_chars": 80
+        }
+      }
+    },
+    {
+      "id": "generic-financial-alert",
+      "name": "Financial / Security Alert",
+      "priority": 90,
+      "type": "financial_alert",
+      "detect": {
+        "subject_regex": "(?i)(fraud (alert|detected)|unusual (activity|sign.in|login)|account (locked|suspended|compromised|disabled|restricted)|security (alert|notice|warning)|payment (failed|declined)|suspicious (activity|transaction|login)|unauthorized)"
+      },
+      "extract": {
+        "alert_type": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)fraud|fraudulent|suspicious.(?:activity|charge|transaction)": "fraud",
+            "(?i)account.(?:locked|suspended|disabled|compromised)": "account_locked",
+            "(?i)payment.(?:failed|declined)|declined.payment": "payment_failed",
+            "(?i)unusual.activity|unusual.sign.in|unrecognized": "unusual_activity",
+            "(?i)security.(?:alert|notice|warning)|verify.your|unauthorized": "security_alert"
+          }
+        },
+        "account_hint": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:account|card|ending in)\\s*[*x]*(\\d{4})\\b"
+        },
+        "amount": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        },
+        "urgent": {
+          "static": true
+        }
+      }
+    },
+    {
+      "id": "generic-subscription-expiry",
+      "name": "Subscription Expiry / Renewal",
+      "priority": 80,
+      "type": "subscription",
+      "detect": {
+        "subject_regex": "(?i)(subscription (expiring|expires|will (renew|expire|end)|ending)|your (trial|subscription|membership) (ends|expires|is expiring) (soon|in \\d+|tomorrow|today)|upcoming (renewal|charge|payment))"
+      },
+      "extract": {
+        "service": {
+          "source": "from_name",
+          "max_chars": 40
+        },
+        "expiry_date": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:expires?|ends?|renews?|renewal date)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\d{1,2}/\\d{1,2}/\\d{2,4})"
+        },
+        "amount": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        },
+        "action_needed": {
+          "static": true
+        }
+      }
+    },
+    {
+      "id": "generic-job",
+      "name": "Job / Recruiting Email",
+      "priority": 75,
+      "type": "job",
+      "detect": {
+        "subject_regex": "(?i)(offer letter|interview (invitation|request|scheduled|confirmed)|we.d like to (speak|connect|discuss|interview)|application (moved forward|status update|decision|next steps)|recruiter (outreach|message)|exciting (opportunity|role|position))"
+      },
+      "extract": {
+        "company": {
+          "source": "from_name",
+          "max_chars": 40
+        },
+        "action": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)offer letter|we.re (?:pleased|excited|happy|delighted) to offer": "offer",
+            "(?i)\\binterview\\b|schedule a call|speak with you|connect with you": "interview",
+            "(?i)application (?:update|status|received|moved|decision|next steps)": "application_update",
+            "(?i)recruiter|outreach|exploring|opportunity": "recruiter_outreach"
+          }
+        },
+        "role": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:for the|for a|as a|as an|the|a)\\s+([A-Z][a-zA-Z &]+?)(?:\\s+(?:position|role|opportunity|at|with|@)|[,.]|$)"
+        },
+        "action_summary": {
+          "source": "subject",
+          "max_chars": 80
+        }
+      }
+    },
+    {
+      "id": "generic-shipping",
+      "name": "Generic Shipping Update",
+      "priority": 70,
+      "type": "shipping",
+      "detect": {
+        "subject_regex": "(?i)(has shipped|out for delivery|order delivered|your package|delivery update|shipment (update|confirmation)|delivered today|arriving today|arriving tomorrow|expected delivery|in transit)"
+      },
+      "extract": {
+        "tracking_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:tracking[:\\s#]+|1Z)([A-Z0-9]{10,})|\\b(\\d{20,22})\\b"
+        },
+        "status": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)out.?for.?delivery|on its way|with delivery driver": "out_for_delivery",
+            "(?i)\\bdelivered\\b|delivery complete|has been delivered": "delivered",
+            "(?i)arriving today": "arriving_today",
+            "(?i)\\bshipped\\b|has shipped|in transit": "shipped"
+          }
+        },
+        "estimated_delivery": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?i)(?:by|arriving|estimated|expected)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\w+day(?:,\\s*[A-Za-z]+ \\d+)?|today|tomorrow)"
+        },
+        "carrier": {
+          "source": [
+            "sender",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)ups\\.com|@ups\\.|\\bUPS\\b|united.?parcel": "UPS",
+            "(?i)fedex\\.com|@fedex\\.|\\bFedEx\\b|federal.?express": "FedEx",
+            "(?i)usps\\.com|@usps\\.|\\bUSPS\\b|postal.?service": "USPS",
+            "(?i)dhl\\.com|@dhl\\.|\\bDHL\\b": "DHL",
+            "(?i)amazon\\.com|@amazon\\.|amzn\\.": "Amazon"
+          }
+        }
+      }
+    },
+    {
+      "id": "generic-order-confirm",
+      "name": "Generic Order Confirmation",
+      "priority": 65,
+      "type": "order_confirm",
+      "detect": {
+        "subject_regex": "(?i)(order (confirmed|received|placed|#\\d+)|thank you for (your order|your purchase)|your receipt from|purchase confirmation)"
+      },
+      "extract": {
+        "order_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:#|order\\s*#?\\s*)([A-Z0-9\\-]{4,})"
+        },
+        "total": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        },
+        "merchant": {
+          "source": "from_name",
+          "max_chars": 40
+        }
+      }
+    },
+    {
+      "id": "generic-billing",
+      "name": "Generic Billing / Invoice",
+      "priority": 60,
+      "type": "billing",
+      "detect": {
+        "subject_regex": "(?i)(bill|invoice|statement|payment due|amount due|balance due|your (bill|invoice|statement) is ready|new statement)"
+      },
+      "extract": {
+        "amount": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        },
+        "due_date": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:due|by|before|pay by)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\d{1,2}/\\d{1,2}/\\d{2,4}|\\d+ days?)"
+        },
+        "provider": {
+          "source": "from_name",
+          "max_chars": 40
+        }
+      }
+    }
+  ]
+}
