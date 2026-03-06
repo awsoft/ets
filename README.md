@@ -65,7 +65,7 @@ Run the email pipeline:
 2. Fetch Gmail: `GOG_KEYRING_PASSWORD="..." gog gmail search "newer_than:1h" --limit 30 -p`
 3. Normalize both to ETS input format and call ets_filter
 4. Pass filter output to ets_extract
-5. Review the extracted emails array. Flag only what needs Drew's attention.
+5. Review the extracted emails array. Flag only what needs the user's attention.
 ```
 
 ## Adding rules
