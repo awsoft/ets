@@ -1,4 +1,4 @@
-![ETS — Email Token Saver](./logo.png)
+![ETS — Email Token Saver](https://raw.githubusercontent.com/awsoft/ets/main/logo.png)
 
 [![npm](https://img.shields.io/npm/v/@awsoft/ets)](https://www.npmjs.com/package/@awsoft/ets)
 [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
