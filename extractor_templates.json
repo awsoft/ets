@@ -6,7 +6,7 @@
     "_tag_schema": {
       "description": "Tag categories applied to every email. Values 0.0-1.0.",
       "categories": {
-        "action_required": "Needs Drew to do something",
+        "action_required": "Needs the user to take action",
         "personal": "From a real person (not automated)",
         "financial": "Money, banking, billing related",
         "investment": "Stocks, markets, portfolio",
