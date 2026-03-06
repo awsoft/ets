@@ -1,14 +1,22 @@
 {
   "name": "@awsoft/openclaw-ets",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "ETS — Email Token Saver. Rules-based email pre-filter plugin for OpenClaw. Strips noise before LLM sees it.",
-  "keywords": ["openclaw", "openclaw-plugin", "email", "token-efficiency", "ai-assistant"],
+  "keywords": [
+    "openclaw",
+    "openclaw-plugin",
+    "email",
+    "token-efficiency",
+    "ai-assistant"
+  ],
   "author": "awsoft",
   "license": "MIT",
   "type": "module",
   "main": "index.ts",
   "openclaw": {
-    "extensions": ["./index.ts"]
+    "extensions": [
+      "./index.ts"
+    ]
   },
   "files": [
     "index.ts",

@@ -1,103 +1,58 @@
 {
   "_meta": {
     "snippet_cap": 300,
-    "pipeline": [
-      "filter",
-      "extract"
-    ],
+    "pipeline": ["filter", "extract"],
     "version": 1
   },
-  "version": 1,
   "rules": [
-    {
-      "id": "block-legacy-studios",
-      "action": "block",
-      "weight": 100,
-      "match": {
-        "sender_contains": "legacystudios"
-      },
-      "reason": "School photo spam"
-    },
-    {
-      "id": "block-high-yield-investor",
-      "action": "block",
-      "weight": 100,
-      "match": {
-        "sender_contains": "highinvestor"
-      },
-      "reason": "Investment newsletter, not interested"
-    },
     {
       "id": "block-weekly-newsletters",
       "action": "block",
       "weight": 80,
-      "match": {
-        "subject_regex": "(?i)(this week at|weekly newsletter|weekly update|weekly digest|this month at)"
-      },
-      "reason": "Generic weekly digest emails"
+      "match": { "subject_regex": "(?i)(this week at|weekly newsletter|weekly update|weekly digest|this month at|monthly newsletter|monthly update)" },
+      "reason": "Generic weekly/monthly digest emails"
     },
     {
-      "id": "block-shipping",
+      "id": "block-shipping-notifications",
       "action": "block",
       "weight": 90,
-      "match": {
-        "subject_regex": "(?i)(has shipped|out for delivery|order delivered|your package|delivery update|shipment (update|confirmation))"
-      },
-      "reason": "Automated shipping notifications"
+      "match": { "subject_regex": "(?i)(has shipped|out for delivery|order delivered|your package|delivery update|shipment (update|confirmation)|delivered today|arriving today|arriving tomorrow)" },
+      "reason": "Automated shipping/delivery notifications"
     },
     {
       "id": "block-promotional",
       "action": "block",
       "weight": 70,
-      "match": {
-        "subject_regex": "(?i)(\\d+% off|flash sale|limited.time offer|exclusive deal|promo code|use code|shop now|don.t miss|last chance|deal alert|ends tonight|ends sunday)"
-      },
-      "reason": "Promotional/marketing emails"
+      "match": { "subject_regex": "(?i)(\\d+% off|flash sale|limited.time offer|exclusive deal|promo code|use code|shop now|don.t miss|last chance|deal alert|ends tonight|ends sunday|save up to|buy now)" },
+      "reason": "Promotional and marketing emails"
     },
     {
       "id": "block-order-confirmations",
       "action": "block",
       "weight": 85,
-      "match": {
-        "subject_regex": "(?i)(order (confirmed|received|#)|thank you for (your order|shopping))"
-      },
-      "reason": "Order confirmations - not actionable"
+      "match": { "subject_regex": "(?i)(order (confirmed|received|#\\d)|thank you for (your order|shopping with us))" },
+      "reason": "Order confirmation receipts - not actionable"
     },
     {
-      "id": "block-subscription-renewals",
+      "id": "block-social-digests",
       "action": "block",
-      "weight": 60,
-      "match": {
-        "subject_regex": "(?i)(subscription (renewal|renew|renewed)|auto.renew|billing (reminder|notice)|invoice (generated|ready))"
-      },
-      "reason": "Subscription/billing auto-notices - flag only if near expiry via other means"
+      "weight": 75,
+      "match": { "subject_regex": "(?i)(people you may know|suggested for you|trending (now|today)|top (posts|stories|updates)|see what.s new|activity digest|notification digest)" },
+      "reason": "Social platform digest emails"
     },
     {
       "id": "allow-financial-security",
       "action": "allow",
       "weight": 100,
-      "match": {
-        "subject_regex": "(?i)(fraud alert|unusual (activity|sign.in)|account (locked|suspended|compromised|disabled)|security alert|payment (failed|declined)|wire transfer|verify your)"
-      },
-      "reason": "Financial/security alerts - always important"
+      "match": { "subject_regex": "(?i)(fraud alert|unusual (activity|sign.in)|account (locked|suspended|compromised|disabled)|security alert|payment (failed|declined)|wire transfer|verify your (identity|account)|suspicious)" },
+      "reason": "Financial and security alerts - always important"
     },
     {
       "id": "allow-job-search",
       "action": "allow",
       "weight": 95,
-      "match": {
-        "subject_regex": "(?i)(job offer|offer letter|interview (invitation|request|scheduled)|application (received|update|status)|recruiter|we.d like to (speak|connect|discuss))"
-      },
-      "reason": "Active job search - flag all"
-    },
-    {
-      "id": "allow-playmetrics",
-      "action": "allow",
-      "weight": 85,
-      "match": {
-        "sender_contains": "playmetrics"
-      },
-      "reason": "Soccer schedule platform"
+      "match": { "subject_regex": "(?i)(offer letter|interview (invitation|request|scheduled|confirmed)|we.d like to (speak|connect|discuss|interview)|application (status update|decision|moved forward))" },
+      "reason": "Job search milestone emails - always flag"
     }
   ]
 }
