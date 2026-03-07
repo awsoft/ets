@@ -783,8 +783,9 @@ Options:
       "type": "financial_alert",
       "tags": {"action_required": 0.9, "financial": 0.8},
       "snippet": "We noticed a sign-in from a new device...",
-      "snippet_policy": "full",
-      "source": "gmail"
+      "snippet_policy_applied": "full",
+      "matched_template": "paypal-security",
+      "source_bucket": "passed"
     }
   ]
 }
