@@ -1,0 +1,67 @@
+{
+  "rules": [
+    {
+      "id": "allow-trusted-domain",
+      "action": "allow",
+      "weight": 60,
+      "match": {"sender_domain": "trusted.com"},
+      "reason": "Trusted domain"
+    },
+    {
+      "id": "block-spam-domain",
+      "action": "block",
+      "weight": 60,
+      "match": {"sender_domain": "spam.com"},
+      "reason": "Spam domain"
+    },
+    {
+      "id": "allow-sender-contains",
+      "action": "allow",
+      "weight": 40,
+      "match": {"sender_contains": "news@"},
+      "reason": "Newsletter sender pattern"
+    },
+    {
+      "id": "block-sender-contains",
+      "action": "block",
+      "weight": 40,
+      "match": {"sender_contains": "noreply@spam"},
+      "reason": "Block bad noreply"
+    },
+    {
+      "id": "allow-sender-exact",
+      "action": "allow",
+      "weight": 55,
+      "match": {"sender_exact": "vip@work.com"},
+      "reason": "VIP sender"
+    },
+    {
+      "id": "block-sender-exact",
+      "action": "block",
+      "weight": 55,
+      "match": {"sender_exact": "bad@actor.com"},
+      "reason": "Known bad sender"
+    },
+    {
+      "id": "allow-subject-regex",
+      "action": "allow",
+      "weight": 30,
+      "match": {"subject_regex": "(?i)important"},
+      "reason": "Important subject"
+    },
+    {
+      "id": "block-body-regex",
+      "action": "block",
+      "weight": 30,
+      "match": {"body_regex": "(?i)unsubscribe"},
+      "reason": "Body contains unsubscribe"
+    },
+    {
+      "id": "hard-allow-bank",
+      "action": "allow",
+      "weight": 90,
+      "match": {"sender_domain": "mybank.com"},
+      "reason": "Bank domain - hard allow"
+    }
+  ]
+}

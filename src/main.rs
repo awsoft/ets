@@ -72,6 +72,10 @@ struct Cli {
     #[arg(long, env = "ETS_TEMPLATES_PATH")]
     templates: Option<PathBuf>,
 
+    /// Path to local rules overrides (merged with --rules, overrides by ID)
+    #[arg(long, env = "ETS_LOCAL_RULES_PATH")]
+    local_rules: Option<PathBuf>,
+
     /// Score threshold below which emails are blocked (inclusive)
     #[arg(long, default_value = "-50")]
     threshold_block: i32,
@@ -137,13 +141,15 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     let rules_path = cli.rules.unwrap_or_else(default_rules_path);
+    let local_rules_path = cli.local_rules;
     let db_path = cli.db.unwrap_or_else(default_db_path);
     let templates_path = cli.templates.unwrap_or_else(default_templates_path);
 
     match cli.command {
         Commands::Filter { explain } => {
-            let engine = filter::RuleEngine::load(
+            let engine = filter::RuleEngine::load_with_local(
                 &rules_path,
+                local_rules_path.as_deref(),
                 cli.threshold_block,
                 cli.threshold_allow,
             )?;
@@ -165,8 +171,9 @@ fn main() -> Result<()> {
 
         Commands::Pipeline { snippet_cap, explain } => {
             // Filter + extract in one process — no inter-process JSON serialization
-            let filter_engine = filter::RuleEngine::load(
+            let filter_engine = filter::RuleEngine::load_with_local(
                 &rules_path,
+                local_rules_path.as_deref(),
                 cli.threshold_block,
                 cli.threshold_allow,
             )?;

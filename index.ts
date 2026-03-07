@@ -82,7 +82,13 @@ function runEts(
   const mergedEnv = { ...process.env, ...env };
   const result = spawnSync(
     BINARY_PATH,
-    ["--rules", rulesPathResolved, "--db", dbPathResolved, "--templates", templatesPathResolved, ...args],
+    [
+      "--rules", rulesPathResolved,
+      "--db", dbPathResolved,
+      "--templates", templatesPathResolved,
+      ...(localRulesPathResolved ? ["--local-rules", localRulesPathResolved] : []),
+      ...args,
+    ],
     { input, encoding: "utf8", env: mergedEnv, maxBuffer: 50 * 1024 * 1024 }
   );
   return {
@@ -177,6 +183,7 @@ function loadTemplates(templatesPath: string): TemplatesFile {
 // These are set during register() and used by runEts() above.
 // ---------------------------------------------------------------------------
 let rulesPathResolved: string = DEFAULT_RULES_PATH;
+let localRulesPathResolved: string | null = null;
 let dbPathResolved: string = DEFAULT_DB_PATH;
 let templatesPathResolved: string = DEFAULT_TEMPLATES_PATH;
 
@@ -190,6 +197,9 @@ export default function register(api: any): void {
   dbPathResolved = cfg.dbPath
     ? path.resolve(String(cfg.dbPath).replace(/^~/, os.homedir()))
     : DEFAULT_DB_PATH;
+  localRulesPathResolved = cfg.localRulesPath
+    ? path.resolve(String(cfg.localRulesPath).replace(/^~/, os.homedir()))
+    : null;
   templatesPathResolved = cfg.templatesPath
     ? path.resolve(String(cfg.templatesPath).replace(/^~/, os.homedir()))
     : DEFAULT_TEMPLATES_PATH;

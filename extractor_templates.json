@@ -2,7 +2,7 @@
   "_meta": {
     "version": 2,
     "description": "ETS extraction templates v1.3.0. Each template defines how to detect an email type and what fields to extract. Templates are matched in priority order (highest first). Tags apply weighted category scores to each email; snippet policy is derived from final tag scores.",
-    "agent_instructions": "To add a new extractor template, use the ets_add_extractor tool or append an entry to templates[] following the schema below. Required fields: id (unique snake_case), name, priority, type, detect, extract, tags.\n\n--- TAGS ---\ntags is an object with weighted scores (0.0–1.0) for any of: action_required, personal, financial, investment, job, kids, travel, marketing, social, newsletter. Only include categories relevant to this template type — others default to 0.0. The cross-cutting tag_rules array applies additional score adjustments based on subject/snippet regex matching (using max() merge), so your base tags only need to capture what is unconditionally true for this template type.\n\nSnippet policy (applied automatically from final tag scores after tag_rules merge):\n  full snippet:  action_required >= 0.6 OR personal >= 0.7\n  100 chars:     action_required >= 0.3 OR personal >= 0.4 OR investment >= 0.7\n  omitted:       everything else (tags + extracted fields only — no snippet tokens)\n\n--- PRIORITY GUIDE ---\n  >= 110  Specific sender domain + specific subject regex (UPS shipping, Amazon orders)\n  100–109 Site-specific: any email from a known sender domain\n  75–99   High-confidence generic type (financial alerts, job emails, calendar invites)\n  50–74   Broad generic type (generic shipping, billing, order confirms)\n  < 50    Fallback / catch-all patterns\n\n--- DETECT ---\nAt least one rule required: sender_domain (exact), sender_contains (substring), subject_regex, snippet_regex. All must match unless 'any: true'.\n\n--- EXTRACT ---\nEach field uses one of: static (fixed value), regex (returns capture group 1), enum_map ({pattern: value}, first match wins), or max_chars alone (truncates source text). Source can be a string or array tried in order: 'subject', 'snippet', 'sender', 'from_name'.\n\n--- EXAMPLE: Etsy order template ---\n{\n  \"id\": \"etsy-order\",\n  \"name\": \"Etsy Order Confirmation\",\n  \"priority\": 105,\n  \"type\": \"order_confirm\",\n  \"detect\": {\n    \"sender_domain\": \"etsy.com\",\n    \"subject_regex\": \"(?i)(order confirmed|you bought|receipt)\"\n  },\n  \"tags\": {\"marketing\": 0.1, \"financial\": 0.3, \"action_required\": 0.0},\n  \"extract\": {\n    \"order_number\": {\"source\": [\"subject\", \"snippet\"], \"regex\": \"#(\\\\d{8,})\"},\n    \"total\": {\"source\": \"snippet\", \"regex\": \"\\\\$[\\\\d,]+\\\\.?\\\\d*\"},\n    \"shop\": {\"source\": \"snippet\", \"regex\": \"(?:from|shop:)\\\\s+([A-Za-z0-9 ]{2,40})\"},\n    \"item_hint\": {\"source\": \"snippet\", \"max_chars\": 80}\n  }\n}",
+    "agent_instructions": "To add a new extractor template, use the ets_add_extractor tool or append an entry to templates[] following the schema below. Required fields: id (unique snake_case), name, priority, type, detect, extract, tags.\n\n--- TAGS ---\ntags is an object with weighted scores (0.0\u20131.0) for any of: action_required, personal, financial, investment, job, kids, travel, marketing, social, newsletter. Only include categories relevant to this template type \u2014 others default to 0.0. The cross-cutting tag_rules array applies additional score adjustments based on subject/snippet regex matching (using max() merge), so your base tags only need to capture what is unconditionally true for this template type.\n\nSnippet policy (applied automatically from final tag scores after tag_rules merge):\n  full snippet:  action_required >= 0.6 OR personal >= 0.7\n  100 chars:     action_required >= 0.3 OR personal >= 0.4 OR investment >= 0.7\n  omitted:       everything else (tags + extracted fields only \u2014 no snippet tokens)\n\n--- PRIORITY GUIDE ---\n  >= 110  Specific sender domain + specific subject regex (UPS shipping, Amazon orders)\n  100\u2013109 Site-specific: any email from a known sender domain\n  75\u201399   High-confidence generic type (financial alerts, job emails, calendar invites)\n  50\u201374   Broad generic type (generic shipping, billing, order confirms)\n  < 50    Fallback / catch-all patterns\n\n--- DETECT ---\nAt least one rule required: sender_domain (exact), sender_contains (substring), subject_regex, snippet_regex. All must match unless 'any: true'.\n\n--- EXTRACT ---\nEach field uses one of: static (fixed value), regex (returns capture group 1), enum_map ({pattern: value}, first match wins), or max_chars alone (truncates source text). Source can be a string or array tried in order: 'subject', 'snippet', 'sender', 'from_name'.\n\n--- EXAMPLE: Etsy order template ---\n{\n  \"id\": \"etsy-order\",\n  \"name\": \"Etsy Order Confirmation\",\n  \"priority\": 105,\n  \"type\": \"order_confirm\",\n  \"detect\": {\n    \"sender_domain\": \"etsy.com\",\n    \"subject_regex\": \"(?i)(order confirmed|you bought|receipt)\"\n  },\n  \"tags\": {\"marketing\": 0.1, \"financial\": 0.3, \"action_required\": 0.0},\n  \"extract\": {\n    \"order_number\": {\"source\": [\"subject\", \"snippet\"], \"regex\": \"#(\\\\d{8,})\"},\n    \"total\": {\"source\": \"snippet\", \"regex\": \"\\\\$[\\\\d,]+\\\\.?\\\\d*\"},\n    \"shop\": {\"source\": \"snippet\", \"regex\": \"(?:from|shop:)\\\\s+([A-Za-z0-9 ]{2,40})\"},\n    \"item_hint\": {\"source\": \"snippet\", \"max_chars\": 80}\n  }\n}",
     "_tag_schema": {
       "description": "Tag categories applied to every email. Values 0.0-1.0.",
       "categories": {
@@ -20,60 +20,321 @@
       "snippet_policy": {
         "full": "action_required >= 0.6 OR personal >= 0.7",
         "short_100": "action_required >= 0.3 OR personal >= 0.4 OR investment >= 0.7",
-        "omit": "everything else — tags only, no snippet"
+        "omit": "everything else \u2014 tags only, no snippet"
       }
     }
   },
   "tag_rules": [
     {
       "id": "tag-urgent",
-      "match": {"subject_regex": "(?i)(urgent|action required|immediate action|expires today|time.sensitive|respond by|deadline)"},
-      "adjust": {"action_required": 0.9, "personal": 0.3}
+      "match": {
+        "subject_regex": "(?i)(urgent|action required|immediate action|expires today|time.sensitive|respond by|deadline)"
+      },
+      "adjust": {
+        "action_required": 0.9,
+        "personal": 0.3
+      }
     },
     {
       "id": "tag-personal-greeting",
-      "match": {"subject_regex": "(?i)^(re:|fwd:|hey |hi |hello )"},
-      "adjust": {"personal": 0.8, "action_required": 0.4}
+      "match": {
+        "subject_regex": "(?i)^(re:|fwd:|hey |hi |hello )"
+      },
+      "adjust": {
+        "personal": 0.8,
+        "action_required": 0.4
+      }
     },
     {
       "id": "tag-investment",
-      "match": {"subject_regex": "(?i)(stock|portfolio|market|dividend|earnings|ticker|investment|trading|bull|bear|nasdaq|s&p|etf|reit|yield)"},
-      "adjust": {"investment": 0.85, "newsletter": 0.3}
+      "match": {
+        "subject_regex": "(?i)(stock|portfolio|market|dividend|earnings|ticker|investment|trading|bull|bear|nasdaq|s&p|etf|reit|yield)"
+      },
+      "adjust": {
+        "investment": 0.85,
+        "newsletter": 0.3
+      }
     },
     {
       "id": "tag-kids-school",
-      "match": {"subject_regex": "(?i)(school|grade|class|student|parent|permission|field trip|pickup|dismissal|lunch|yearbook|pta|teacher|homework)"},
-      "adjust": {"kids": 0.85, "personal": 0.4, "action_required": 0.4}
+      "match": {
+        "subject_regex": "(?i)(school|grade|class|student|parent|permission|field trip|pickup|dismissal|lunch|yearbook|pta|teacher|homework)"
+      },
+      "adjust": {
+        "kids": 0.85,
+        "personal": 0.4,
+        "action_required": 0.4
+      }
     },
     {
       "id": "tag-kids-sports",
-      "match": {"subject_regex": "(?i)(game|practice|tournament|schedule|team|coach|player|registration|tryout|match|kickoff|lineup)"},
-      "adjust": {"kids": 0.7, "action_required": 0.3}
+      "match": {
+        "subject_regex": "(?i)(game|practice|tournament|schedule|team|coach|player|registration|tryout|match|kickoff|lineup)"
+      },
+      "adjust": {
+        "kids": 0.7,
+        "action_required": 0.3
+      }
     },
     {
       "id": "tag-travel",
-      "match": {"subject_regex": "(?i)(flight|hotel|reservation|check.in|itinerary|boarding|arrival|departure|booking confirmation|car rental)"},
-      "adjust": {"travel": 0.85, "action_required": 0.3}
+      "match": {
+        "subject_regex": "(?i)(flight|hotel|reservation|check.in|itinerary|boarding|arrival|departure|booking confirmation|car rental)"
+      },
+      "adjust": {
+        "travel": 0.85,
+        "action_required": 0.3
+      }
     },
     {
       "id": "tag-newsletter",
-      "match": {"subject_regex": "(?i)(newsletter|digest|roundup|weekly|monthly|daily briefing|morning brief|update from|top stories)"},
-      "adjust": {"newsletter": 0.85, "action_required": 0.0, "personal": 0.0}
+      "match": {
+        "subject_regex": "(?i)(newsletter|digest|roundup|weekly|monthly|daily briefing|morning brief|update from|top stories)"
+      },
+      "adjust": {
+        "newsletter": 0.85,
+        "action_required": 0.0,
+        "personal": 0.0
+      }
     },
     {
       "id": "tag-payment-needed",
-      "match": {"subject_regex": "(?i)(payment (due|overdue|required|past due|failed)|invoice (due|overdue)|amount due|bill (due|overdue))"},
-      "adjust": {"financial": 0.8, "action_required": 0.8}
+      "match": {
+        "subject_regex": "(?i)(payment (due|overdue|required|past due|failed)|invoice (due|overdue)|amount due|bill (due|overdue))"
+      },
+      "adjust": {
+        "financial": 0.8,
+        "action_required": 0.8
+      }
     },
     {
       "id": "tag-social",
-      "match": {"subject_regex": "(?i)(commented on|mentioned you|replied to|liked your|followed you|friend request|connection request|message from)"},
-      "adjust": {"social": 0.8, "personal": 0.5, "action_required": 0.2}
+      "match": {
+        "subject_regex": "(?i)(commented on|mentioned you|replied to|liked your|followed you|friend request|connection request|message from)"
+      },
+      "adjust": {
+        "social": 0.8,
+        "personal": 0.5,
+        "action_required": 0.2
+      }
     },
     {
       "id": "tag-marketing",
-      "match": {"subject_regex": "(?i)(\\d+% off|sale|deal|offer|discount|promo|coupon|save|shop|buy now|limited time|clearance|flash sale)"},
-      "adjust": {"marketing": 0.9, "action_required": 0.0, "newsletter": 0.3}
+      "match": {
+        "subject_regex": "(?i)(\\d+% off|sale|deal|offer|discount|promo|coupon|save|shop|buy now|limited time|clearance|flash sale)"
+      },
+      "adjust": {
+        "marketing": 0.9,
+        "action_required": 0.0,
+        "newsletter": 0.3
+      }
+    },
+    {
+      "id": "tag-school-platform",
+      "match": {
+        "subject_regex": "(?i)(seesaw|classdojo|\\bremind\\b|powerschool|schoology|canvas lms|parentsquare|infinite campus|blackboard)"
+      },
+      "adjust": {
+        "kids": 0.9,
+        "action_required": 0.4,
+        "personal": 0.3
+      }
+    },
+    {
+      "id": "tag-sports-platform",
+      "match": {
+        "subject_regex": "(?i)(teamsnap|playmetrics|leagueapps|sportsengine|game reminder|practice reminder|team update|roster|lineup change)"
+      },
+      "adjust": {
+        "kids": 0.85,
+        "action_required": 0.4
+      }
+    },
+    {
+      "id": "tag-financial-bank",
+      "match": {
+        "subject_regex": "(?i)(statement (is )?ready|account statement|monthly statement|available online|e-statement|paperless statement)"
+      },
+      "adjust": {
+        "financial": 0.8,
+        "newsletter": 0.3,
+        "action_required": 0.1
+      }
+    },
+    {
+      "id": "tag-financial-alert2",
+      "match": {
+        "subject_regex": "(?i)(low balance|balance alert|spending alert|large (transaction|purchase)|charge of \\$|transaction alert|credit card statement)"
+      },
+      "adjust": {
+        "financial": 0.85,
+        "action_required": 0.5
+      }
+    },
+    {
+      "id": "tag-investment-trade",
+      "match": {
+        "subject_regex": "(?i)(trade (confirm|executed|filled)|order (filled|executed|placed)|dividend (received|reinvested|payment)|portfolio (update|summary)|account balance)"
+      },
+      "adjust": {
+        "investment": 0.9,
+        "financial": 0.6
+      }
+    },
+    {
+      "id": "tag-travel-flight",
+      "match": {
+        "subject_regex": "(?i)(your (flight|trip|itinerary)|check.in (now|open|reminder)|gate (change|assignment)|boarding pass|flight (canceled|delayed|change)|seat (assignment|upgrade))"
+      },
+      "adjust": {
+        "travel": 0.95,
+        "action_required": 0.5
+      }
+    },
+    {
+      "id": "tag-travel-hotel",
+      "match": {
+        "subject_regex": "(?i)(hotel (confirmation|reservation|check.in|check.out)|your (stay|reservation) at|room (reservation|confirmation)|nights? (stay|reserved))"
+      },
+      "adjust": {
+        "travel": 0.9,
+        "action_required": 0.3
+      }
+    },
+    {
+      "id": "tag-travel-rental",
+      "match": {
+        "subject_regex": "(?i)(car rental (confirmation|receipt)|rental (confirmation|return|pickup)|your (rental|vehicle) (is|confirmation))"
+      },
+      "adjust": {
+        "travel": 0.85,
+        "action_required": 0.2
+      }
+    },
+    {
+      "id": "tag-food-delivery",
+      "match": {
+        "subject_regex": "(?i)(your (order|delivery) (is|has been)|on its way|driver (is|has)|food delivery|doordash|uber eats|grubhub|instacart|your dasher)"
+      },
+      "adjust": {
+        "marketing": 0.2,
+        "action_required": 0.0
+      }
+    },
+    {
+      "id": "tag-security-reset",
+      "match": {
+        "subject_regex": "(?i)(password (reset|change|changed|update)|reset your password|verification code|one.time (code|password|passcode)|two.factor|2fa|sign.in code|confirm your (email|account|identity))"
+      },
+      "adjust": {
+        "action_required": 0.9,
+        "personal": 0.3,
+        "financial": 0.2
+      }
+    },
+    {
+      "id": "tag-login-alert",
+      "match": {
+        "subject_regex": "(?i)(new (sign.in|login|device)|sign.in from|login (attempt|from|detected)|someone (signed in|accessed)|new location|unrecognized (device|sign.in|login))"
+      },
+      "adjust": {
+        "action_required": 0.85,
+        "personal": 0.4
+      }
+    },
+    {
+      "id": "tag-job-apply",
+      "match": {
+        "subject_regex": "(?i)(application (received|submitted|under review|status|update)|applied to|your resume|job alert|new job|job match|hiring (manager|team))"
+      },
+      "adjust": {
+        "job": 0.9,
+        "action_required": 0.4
+      }
+    },
+    {
+      "id": "tag-marketing-promo",
+      "match": {
+        "subject_regex": "(?i)(free (shipping|delivery)|members? (only|exclusive)|early access|back in stock|new arrivals|just (dropped|launched)|shop (now|the)|don.t miss)"
+      },
+      "adjust": {
+        "marketing": 0.9,
+        "action_required": 0.0,
+        "newsletter": 0.3
+      }
+    },
+    {
+      "id": "tag-newsletter-digest",
+      "match": {
+        "subject_regex": "(?i)(this week|last week|recap|highlights|summary|what.s new|what to (know|watch)|in case you missed|trending (now|today|this week))"
+      },
+      "adjust": {
+        "newsletter": 0.8,
+        "action_required": 0.0
+      }
+    },
+    {
+      "id": "tag-data-breach",
+      "match": {
+        "subject_regex": "(?i)(data breach|security breach|information (exposed|compromised)|your (data|information) (may have been|was|has been) (exposed|compromised|accessed)|credit monitoring)"
+      },
+      "adjust": {
+        "action_required": 1.0,
+        "financial": 0.5,
+        "personal": 0.5
+      }
+    },
+    {
+      "id": "tag-tax",
+      "match": {
+        "subject_regex": "(?i)(tax (return|refund|filing|form|document|statement|notice)|w-2|1099|irs|turbotax|h&r block|tax season|file (your )?taxes)"
+      },
+      "adjust": {
+        "financial": 0.9,
+        "action_required": 0.5
+      }
+    },
+    {
+      "id": "tag-meeting-invite",
+      "match": {
+        "subject_regex": "(?i)(meeting (invitation|request|scheduled|confirmed)|zoom (invite|meeting|call)|teams (meeting|call)|google meet|webinar (invitation|registration)|calendly)"
+      },
+      "adjust": {
+        "action_required": 0.7,
+        "personal": 0.5
+      }
+    },
+    {
+      "id": "tag-social-github",
+      "match": {
+        "subject_regex": "(?i)(pull request|\\bpr #\\d|code review|merge conflict|github (action|alert|security)|dependabot|vulnerability (found|detected))"
+      },
+      "adjust": {
+        "job": 0.6,
+        "social": 0.4,
+        "action_required": 0.5
+      }
+    },
+    {
+      "id": "tag-social-linkedin",
+      "match": {
+        "subject_regex": "(?i)(linkedin|inmail|connection (request|accepted)|who viewed your profile|job (alert|recommendation|match)|people you may know)"
+      },
+      "adjust": {
+        "social": 0.7,
+        "job": 0.5,
+        "action_required": 0.2
+      }
+    },
+    {
+      "id": "tag-utility-bill",
+      "match": {
+        "subject_regex": "(?i)(electric|gas|water|utility|energy|power company|public service|national grid|pg&e|con ?ed|duke energy)"
+      },
+      "adjust": {
+        "financial": 0.7,
+        "action_required": 0.3
+      }
     }
   ],
   "templates": [
@@ -86,14 +347,25 @@
         "sender_domain": "amazon.com",
         "subject_regex": "(?i)(shipped|out for delivery|delivered|arriving)"
       },
-      "tags": {"travel": 0.3, "marketing": 0.0, "action_required": 0.0, "newsletter": 0.0},
+      "tags": {
+        "travel": 0.3,
+        "marketing": 0.0,
+        "action_required": 0.0,
+        "newsletter": 0.0
+      },
       "extract": {
         "order_number": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "regex": "(?i)Order\\s*#?([A-Z0-9\\-]{10,})"
         },
         "status": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "enum_map": {
             "(?i)out.?for.?delivery|on its way|with delivery driver": "out_for_delivery",
             "(?i)\\bdelivered\\b|delivery complete|has been delivered": "delivered",
@@ -123,14 +395,25 @@
         "sender_contains": "ups.com",
         "subject_regex": "(?i)(shipped|out for delivery|delivered|arriving|pickup ready)"
       },
-      "tags": {"travel": 0.3, "marketing": 0.0, "action_required": 0.0, "newsletter": 0.0},
+      "tags": {
+        "travel": 0.3,
+        "marketing": 0.0,
+        "action_required": 0.0,
+        "newsletter": 0.0
+      },
       "extract": {
         "tracking_number": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "regex": "(1Z[A-Z0-9]{16})"
         },
         "status": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "enum_map": {
             "(?i)out.?for.?delivery|on its way": "out_for_delivery",
             "(?i)\\bdelivered\\b|delivery complete": "delivered",
@@ -156,14 +439,25 @@
         "sender_contains": "fedex.com",
         "subject_regex": "(?i)(shipped|out for delivery|delivered|arriving|exception)"
       },
-      "tags": {"travel": 0.3, "marketing": 0.0, "action_required": 0.0, "newsletter": 0.0},
+      "tags": {
+        "travel": 0.3,
+        "marketing": 0.0,
+        "action_required": 0.0,
+        "newsletter": 0.0
+      },
       "extract": {
         "tracking_number": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "regex": "\\b(\\d{12}|\\d{15}|\\d{20})\\b"
         },
         "status": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "enum_map": {
             "(?i)out.?for.?delivery|on vehicle": "out_for_delivery",
             "(?i)\\bdelivered\\b|delivery complete": "delivered",
@@ -189,14 +483,25 @@
         "sender_contains": "usps.com",
         "subject_regex": "(?i)(shipped|out for delivery|delivered|arriving|in transit|pickup)"
       },
-      "tags": {"travel": 0.3, "marketing": 0.0, "action_required": 0.0, "newsletter": 0.0},
+      "tags": {
+        "travel": 0.3,
+        "marketing": 0.0,
+        "action_required": 0.0,
+        "newsletter": 0.0
+      },
       "extract": {
         "tracking_number": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "regex": "\\b(9[234]\\d{18,20}|[A-Z]{2}\\d{9}[A-Z]{2})\\b"
         },
         "status": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "enum_map": {
             "(?i)out.?for.?delivery|out for post": "out_for_delivery",
             "(?i)\\bdelivered\\b|delivery complete": "delivered",
@@ -222,14 +527,25 @@
         "sender_contains": "dhl.com",
         "subject_regex": "(?i)(shipped|out for delivery|delivered|arriving|transit)"
       },
-      "tags": {"travel": 0.3, "marketing": 0.0, "action_required": 0.0, "newsletter": 0.0},
+      "tags": {
+        "travel": 0.3,
+        "marketing": 0.0,
+        "action_required": 0.0,
+        "newsletter": 0.0
+      },
       "extract": {
         "tracking_number": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "regex": "\\b(\\d{10,11}|[A-Z]{3}\\d{7,})\\b"
         },
         "status": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "enum_map": {
             "(?i)out.?for.?delivery|with courier": "out_for_delivery",
             "(?i)\\bdelivered\\b|delivery complete": "delivered",
@@ -254,14 +570,25 @@
         "sender_domain": "walmart.com",
         "subject_regex": "(?i)(shipped|out for delivery|delivered|arriving|pickup ready)"
       },
-      "tags": {"travel": 0.3, "marketing": 0.0, "action_required": 0.0, "newsletter": 0.0},
+      "tags": {
+        "travel": 0.3,
+        "marketing": 0.0,
+        "action_required": 0.0,
+        "newsletter": 0.0
+      },
       "extract": {
         "tracking_number": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "regex": "(?:tracking[:\\s#]+|1Z)([A-Z0-9]{10,})"
         },
         "status": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "enum_map": {
             "(?i)out.?for.?delivery|on its way": "out_for_delivery",
             "(?i)\\bdelivered\\b|delivery complete": "delivered",
@@ -284,14 +611,25 @@
         "sender_domain": "ebay.com",
         "subject_regex": "(?i)(shipped|out for delivery|delivered)"
       },
-      "tags": {"travel": 0.3, "marketing": 0.0, "action_required": 0.0, "newsletter": 0.0},
+      "tags": {
+        "travel": 0.3,
+        "marketing": 0.0,
+        "action_required": 0.0,
+        "newsletter": 0.0
+      },
       "extract": {
         "tracking_number": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "regex": "(?:tracking[:\\s#]+|1Z)([A-Z0-9]{10,})"
         },
         "carrier": {
-          "source": ["sender", "snippet"],
+          "source": [
+            "sender",
+            "snippet"
+          ],
           "enum_map": {
             "(?i)ups\\.com|\\bUPS\\b|united.?parcel": "UPS",
             "(?i)fedex\\.com|\\bFedEx\\b|federal.?express": "FedEx",
@@ -300,7 +638,10 @@
           }
         },
         "status": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "enum_map": {
             "(?i)out.?for.?delivery|on its way": "out_for_delivery",
             "(?i)\\bdelivered\\b|delivery complete": "delivered",
@@ -322,14 +663,23 @@
         "sender_domain": "paypal.com",
         "subject_regex": "(?i)(receipt|payment|sent|received|charged|you paid|you received)"
       },
-      "tags": {"financial": 0.9, "action_required": 0.4},
+      "tags": {
+        "financial": 0.9,
+        "action_required": 0.4
+      },
       "extract": {
         "amount": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "regex": "\\$[\\d,]+\\.?\\d*"
         },
         "direction": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "enum_map": {
             "(?i)you sent|you paid|payment sent": "sent",
             "(?i)you received|payment received|money received": "received",
@@ -337,7 +687,10 @@
           }
         },
         "counterparty": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "regex": "(?:to|from|with)\\s+([A-Za-z0-9 ]{2,40}?)(?:\\s+for|\\s+on|\\.|$)"
         }
       }
@@ -351,14 +704,24 @@
         "sender_domain": "amazon.com",
         "subject_regex": "(?i)(order (confirmed|received|placed))"
       },
-      "tags": {"marketing": 0.1, "financial": 0.3, "action_required": 0.0},
+      "tags": {
+        "marketing": 0.1,
+        "financial": 0.3,
+        "action_required": 0.0
+      },
       "extract": {
         "order_number": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "regex": "(?i)#([A-Z0-9\\-]{10,})"
         },
         "total": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "regex": "\\$[\\d,]+\\.?\\d*"
         },
         "item_hint": {
@@ -376,14 +739,24 @@
         "sender_domain": "walmart.com",
         "subject_regex": "(?i)(order (confirmed|received|placed)|thank you for your order|your receipt)"
       },
-      "tags": {"marketing": 0.1, "financial": 0.3, "action_required": 0.0},
+      "tags": {
+        "marketing": 0.1,
+        "financial": 0.3,
+        "action_required": 0.0
+      },
       "extract": {
         "order_number": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "regex": "(?:order|#)\\s*([0-9\\-]{6,})"
         },
         "total": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "regex": "\\$[\\d,]+\\.?\\d*"
         },
         "item_hint": {
@@ -401,14 +774,24 @@
         "sender_domain": "ebay.com",
         "subject_regex": "(?i)(order|purchase|won|you bought)"
       },
-      "tags": {"marketing": 0.1, "financial": 0.3, "action_required": 0.0},
+      "tags": {
+        "marketing": 0.1,
+        "financial": 0.3,
+        "action_required": 0.0
+      },
       "extract": {
         "order_number": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "regex": "(?:order|item)\\s*#?(\\d{10,})"
         },
         "total": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "regex": "\\$[\\d,]+\\.?\\d*"
         },
         "seller": {
@@ -429,10 +812,16 @@
       "detect": {
         "sender_contains": "stripe.com"
       },
-      "tags": {"financial": 0.9, "action_required": 0.4},
+      "tags": {
+        "financial": 0.9,
+        "action_required": 0.4
+      },
       "extract": {
         "amount": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "regex": "\\$[\\d,]+\\.?\\d*"
         },
         "merchant": {
@@ -454,14 +843,24 @@
         "sender_domain": "github.com",
         "subject_regex": "(?i)(pull request|issue|review|mention|assigned)"
       },
-      "tags": {"job": 0.5, "personal": 0.3, "action_required": 0.5},
+      "tags": {
+        "job": 0.5,
+        "personal": 0.3,
+        "action_required": 0.5
+      },
       "extract": {
         "repo": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "regex": "([a-zA-Z0-9_\\-]+/[a-zA-Z0-9_\\-]+)"
         },
         "action": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "enum_map": {
             "(?i)mentioned you|@mention": "mentioned",
             "(?i)assigned to you|you were assigned": "assigned",
@@ -473,7 +872,10 @@
           }
         },
         "pr_or_issue_number": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "regex": "#(\\d+)"
         }
       }
@@ -486,18 +888,27 @@
       "detect": {
         "subject_regex": "(?i)(invited you to|invitation:|calendar invite|you.re invited|save the date)"
       },
-      "tags": {"personal": 0.6, "action_required": 0.7},
+      "tags": {
+        "personal": 0.6,
+        "action_required": 0.7
+      },
       "extract": {
         "event_name": {
           "source": "subject",
           "regex": "(?:invitation:|invited you to|you.re invited to|save the date:?)\\s*(.+)"
         },
         "date_hint": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "regex": "(?:on|for|at)\\s+([A-Za-z]+ \\d+,?\\s*\\d{4}|(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\\w*,?\\s*[A-Za-z]+ \\d+)"
         },
         "time_hint": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "regex": "\\b(\\d{1,2}:\\d{2}\\s*(?:AM|PM|am|pm))\\b"
         },
         "location_hint": {
@@ -514,10 +925,17 @@
       "detect": {
         "subject_regex": "(?i)(fraud (alert|detected)|unusual (activity|sign.in|login)|account (locked|suspended|compromised|disabled|restricted)|security (alert|notice|warning)|payment (failed|declined)|suspicious (activity|transaction|login)|unauthorized)"
       },
-      "tags": {"financial": 1.0, "action_required": 1.0, "personal": 0.0},
+      "tags": {
+        "financial": 1.0,
+        "action_required": 1.0,
+        "personal": 0.0
+      },
       "extract": {
         "alert_type": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "enum_map": {
             "(?i)fraud|fraudulent|suspicious.(?:activity|charge|transaction)": "fraud",
             "(?i)account.(?:locked|suspended|disabled|compromised)": "account_locked",
@@ -527,11 +945,17 @@
           }
         },
         "account_hint": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "regex": "(?:account|card|ending in)\\s*[*x]*(\\d{4})\\b"
         },
         "amount": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "regex": "\\$[\\d,]+\\.?\\d*"
         },
         "urgent": {
@@ -547,18 +971,28 @@
       "detect": {
         "subject_regex": "(?i)(subscription (expiring|expires|will (renew|expire|end)|ending)|your (trial|subscription|membership) (ends|expires|is expiring) (soon|in \\d+|tomorrow|today)|upcoming (renewal|charge|payment))"
       },
-      "tags": {"financial": 0.5, "action_required": 0.6, "newsletter": 0.2},
+      "tags": {
+        "financial": 0.5,
+        "action_required": 0.6,
+        "newsletter": 0.2
+      },
       "extract": {
         "service": {
           "source": "from_name",
           "max_chars": 40
         },
         "expiry_date": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "regex": "(?:expires?|ends?|renews?|renewal date)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\d{1,2}/\\d{1,2}/\\d{2,4})"
         },
         "amount": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "regex": "\\$[\\d,]+\\.?\\d*"
         },
         "action_needed": {
@@ -574,14 +1008,21 @@
       "detect": {
         "subject_regex": "(?i)(offer letter|interview (invitation|request|scheduled|confirmed)|we.d like to (speak|connect|discuss|interview)|application (moved forward|status update|decision|next steps)|recruiter (outreach|message)|exciting (opportunity|role|position))"
       },
-      "tags": {"job": 0.95, "personal": 0.5, "action_required": 0.85},
+      "tags": {
+        "job": 0.95,
+        "personal": 0.5,
+        "action_required": 0.85
+      },
       "extract": {
         "company": {
           "source": "from_name",
           "max_chars": 40
         },
         "action": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "enum_map": {
             "(?i)offer letter|we.re (?:pleased|excited|happy|delighted) to offer": "offer",
             "(?i)\\binterview\\b|schedule a call|speak with you|connect with you": "interview",
@@ -590,7 +1031,10 @@
           }
         },
         "role": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "regex": "(?:for the|for a|as a|as an|the|a)\\s+([A-Z][a-zA-Z &]+?)(?:\\s+(?:position|role|opportunity|at|with|@)|[,.]|$)"
         },
         "action_summary": {
@@ -607,14 +1051,25 @@
       "detect": {
         "subject_regex": "(?i)(has shipped|out for delivery|order delivered|your package|delivery update|shipment (update|confirmation)|delivered today|arriving today|arriving tomorrow|expected delivery|in transit)"
       },
-      "tags": {"travel": 0.3, "marketing": 0.0, "action_required": 0.0, "newsletter": 0.0},
+      "tags": {
+        "travel": 0.3,
+        "marketing": 0.0,
+        "action_required": 0.0,
+        "newsletter": 0.0
+      },
       "extract": {
         "tracking_number": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "regex": "(?:tracking[:\\s#]+|1Z)([A-Z0-9]{10,})|\\b(\\d{20,22})\\b"
         },
         "status": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "enum_map": {
             "(?i)out.?for.?delivery|on its way|with delivery driver": "out_for_delivery",
             "(?i)\\bdelivered\\b|delivery complete|has been delivered": "delivered",
@@ -623,11 +1078,17 @@
           }
         },
         "estimated_delivery": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "regex": "(?i)(?:by|arriving|estimated|expected)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\w+day(?:,\\s*[A-Za-z]+ \\d+)?|today|tomorrow)"
         },
         "carrier": {
-          "source": ["sender", "snippet"],
+          "source": [
+            "sender",
+            "snippet"
+          ],
           "enum_map": {
             "(?i)ups\\.com|@ups\\.|\\bUPS\\b|united.?parcel": "UPS",
             "(?i)fedex\\.com|@fedex\\.|\\bFedEx\\b|federal.?express": "FedEx",
@@ -646,14 +1107,24 @@
       "detect": {
         "subject_regex": "(?i)(order (confirmed|received|placed|#\\d+)|thank you for (your order|your purchase)|your receipt from|purchase confirmation)"
       },
-      "tags": {"marketing": 0.1, "financial": 0.3, "action_required": 0.0},
+      "tags": {
+        "marketing": 0.1,
+        "financial": 0.3,
+        "action_required": 0.0
+      },
       "extract": {
         "order_number": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "regex": "(?:#|order\\s*#?\\s*)([A-Z0-9\\-]{4,})"
         },
         "total": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "regex": "\\$[\\d,]+\\.?\\d*"
         },
         "merchant": {
@@ -670,17 +1141,3219 @@
       "detect": {
         "subject_regex": "(?i)(bill|invoice|statement|payment due|amount due|balance due|your (bill|invoice|statement) is ready|new statement)"
       },
-      "tags": {"financial": 0.9, "action_required": 0.4},
+      "tags": {
+        "financial": 0.9,
+        "action_required": 0.4
+      },
       "extract": {
         "amount": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "regex": "\\$[\\d,]+\\.?\\d*"
         },
         "due_date": {
-          "source": ["subject", "snippet"],
+          "source": [
+            "subject",
+            "snippet"
+          ],
           "regex": "(?:due|by|before|pay by)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\d{1,2}/\\d{1,2}/\\d{2,4}|\\d+ days?)"
         },
         "provider": {
+          "source": "from_name",
+          "max_chars": 40
+        }
+      }
+    },
+    {
+      "id": "target-shipping",
+      "name": "Target Shipping Update",
+      "priority": 110,
+      "type": "shipping",
+      "detect": {
+        "sender_domain": "target.com",
+        "subject_regex": "(?i)(shipped|out for delivery|delivered|arriving|order update)"
+      },
+      "tags": {
+        "marketing": 0.1,
+        "action_required": 0.0
+      },
+      "extract": {
+        "order_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:order|#)\\s*([A-Z0-9\\-]{6,})"
+        },
+        "status": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)out.?for.?delivery": "out_for_delivery",
+            "(?i)\\bdelivered\\b": "delivered",
+            "(?i)\\bshipped\\b|in transit": "shipped",
+            "(?i)ready for pickup|pickup ready": "pickup_ready"
+          }
+        },
+        "estimated_delivery": {
+          "source": "snippet",
+          "regex": "(?i)(?:by|arriving|estimated)[:\\s]+([A-Za-z]+ \\d+|\\w+day[^\\n]{0,20})"
+        },
+        "carrier": {
+          "static": "Target"
+        }
+      }
+    },
+    {
+      "id": "bestbuy-shipping",
+      "name": "Best Buy Shipping Update",
+      "priority": 110,
+      "type": "shipping",
+      "detect": {
+        "sender_domain": "bestbuy.com",
+        "subject_regex": "(?i)(shipped|out for delivery|delivered|arriving|on the way)"
+      },
+      "tags": {
+        "marketing": 0.1,
+        "action_required": 0.0
+      },
+      "extract": {
+        "order_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:order|#|BBY)\\s*([0-9\\-]{6,})"
+        },
+        "status": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)out.?for.?delivery": "out_for_delivery",
+            "(?i)\\bdelivered\\b": "delivered",
+            "(?i)\\bshipped\\b|in transit|on the way": "shipped"
+          }
+        },
+        "estimated_delivery": {
+          "source": "snippet",
+          "regex": "(?i)(?:by|arriving|expected)[:\\s]+([A-Za-z]+ \\d+|\\w+day[^\\n]{0,20})"
+        },
+        "carrier": {
+          "static": "Best Buy"
+        }
+      }
+    },
+    {
+      "id": "apple-shipping",
+      "name": "Apple Order Shipping Update",
+      "priority": 110,
+      "type": "shipping",
+      "detect": {
+        "sender_domain": "apple.com",
+        "subject_regex": "(?i)(shipped|out for delivery|delivered|arriving|dispatched)"
+      },
+      "tags": {
+        "marketing": 0.0,
+        "action_required": 0.0
+      },
+      "extract": {
+        "order_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:W\\d{9}|order\\s*#?\\s*([A-Z0-9\\-]{8,}))"
+        },
+        "tracking_number": {
+          "source": "snippet",
+          "regex": "(?:tracking[:\\s#]+)([A-Z0-9]{10,})"
+        },
+        "status": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)out.?for.?delivery": "out_for_delivery",
+            "(?i)\\bdelivered\\b": "delivered",
+            "(?i)\\bshipped\\b|dispatched|in transit": "shipped"
+          }
+        },
+        "estimated_delivery": {
+          "source": "snippet",
+          "regex": "(?i)(?:by|arriving|delivery)[:\\s]+([A-Za-z]+ \\d+|\\w+day[^\\n]{0,20})"
+        },
+        "carrier": {
+          "static": "Apple"
+        }
+      }
+    },
+    {
+      "id": "etsy-shipping",
+      "name": "Etsy Shipping Update",
+      "priority": 110,
+      "type": "shipping",
+      "detect": {
+        "sender_domain": "etsy.com",
+        "subject_regex": "(?i)(shipped|out for delivery|delivered|on its way)"
+      },
+      "tags": {
+        "marketing": 0.1,
+        "action_required": 0.0
+      },
+      "extract": {
+        "tracking_number": {
+          "source": "snippet",
+          "regex": "(?:tracking[:\\s#]+)([A-Z0-9]{10,})"
+        },
+        "shop": {
+          "source": "snippet",
+          "regex": "(?:from|by|shop:?)\\s+([A-Za-z0-9 &']{2,40}?)(?:\\s+on|\\s+has|\\.|$)"
+        },
+        "status": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)out.?for.?delivery": "out_for_delivery",
+            "(?i)\\bdelivered\\b": "delivered",
+            "(?i)\\bshipped\\b|on its way|in transit": "shipped"
+          }
+        },
+        "estimated_delivery": {
+          "source": "snippet",
+          "regex": "(?i)(?:by|arriving|expected)[:\\s]+([A-Za-z]+ \\d+|\\w+day[^\\n]{0,20})"
+        }
+      }
+    },
+    {
+      "id": "chewy-shipping",
+      "name": "Chewy Shipping Update",
+      "priority": 110,
+      "type": "shipping",
+      "detect": {
+        "sender_domain": "chewy.com",
+        "subject_regex": "(?i)(shipped|out for delivery|delivered|arriving|on its way)"
+      },
+      "tags": {
+        "marketing": 0.1,
+        "action_required": 0.0
+      },
+      "extract": {
+        "order_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:order|#)\\s*([0-9\\-]{6,})"
+        },
+        "tracking_number": {
+          "source": "snippet",
+          "regex": "(?:tracking[:\\s#]+)([A-Z0-9]{10,})"
+        },
+        "status": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)out.?for.?delivery": "out_for_delivery",
+            "(?i)\\bdelivered\\b": "delivered",
+            "(?i)\\bshipped\\b|on its way": "shipped"
+          }
+        },
+        "estimated_delivery": {
+          "source": "snippet",
+          "regex": "(?i)(?:by|arriving|expected)[:\\s]+([A-Za-z]+ \\d+|\\w+day[^\\n]{0,20})"
+        }
+      }
+    },
+    {
+      "id": "doordash-delivery",
+      "name": "DoorDash Order Update",
+      "priority": 110,
+      "type": "food_delivery",
+      "detect": {
+        "sender_domain": "doordash.com",
+        "subject_regex": "(?i)(order|delivery|delivered|on the way|your dasher|picked up|arriving)"
+      },
+      "tags": {
+        "marketing": 0.1,
+        "action_required": 0.0
+      },
+      "extract": {
+        "status": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)delivered|dropped off": "delivered",
+            "(?i)on the way|on their way|heading your way": "on_the_way",
+            "(?i)picked up|dasher picked": "picked_up",
+            "(?i)preparing|restaurant is|being prepared": "preparing",
+            "(?i)order confirmed|order received": "confirmed"
+          }
+        },
+        "restaurant": {
+          "source": "snippet",
+          "regex": "(?:from|at|order from)\\s+([A-Za-z0-9 &'\\-]{2,50}?)(?:\\s+is|\\s+has|\\s+will|[,.]|$)"
+        },
+        "estimated_delivery": {
+          "source": "snippet",
+          "regex": "(?i)(?:arriving|estimated|by|eta)[:\\s]+([0-9:\\s apmAPM]{3,15}|\\d+ min)"
+        }
+      }
+    },
+    {
+      "id": "ubereats-delivery",
+      "name": "Uber Eats Order Update",
+      "priority": 110,
+      "type": "food_delivery",
+      "detect": {
+        "sender_domain": "uber.com",
+        "subject_regex": "(?i)(order|delivery|delivered|on the way|picked up|food|receipt)"
+      },
+      "tags": {
+        "marketing": 0.1,
+        "financial": 0.2,
+        "action_required": 0.0
+      },
+      "extract": {
+        "status": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)delivered|order delivered": "delivered",
+            "(?i)on the way|courier is": "on_the_way",
+            "(?i)picked up|courier picked": "picked_up",
+            "(?i)preparing|restaurant is preparing": "preparing",
+            "(?i)order confirmed|order received": "confirmed"
+          }
+        },
+        "restaurant": {
+          "source": "snippet",
+          "regex": "(?:from|at|order from)\\s+([A-Za-z0-9 &'\\-]{2,50}?)(?:\\s+is|\\s+has|[,.]|$)"
+        },
+        "total": {
+          "source": "snippet",
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        },
+        "estimated_delivery": {
+          "source": "snippet",
+          "regex": "(?i)(?:arriving|eta|by)[:\\s]+([0-9:\\s apmAPM]{3,15}|\\d+ min)"
+        }
+      }
+    },
+    {
+      "id": "grubhub-delivery",
+      "name": "Grubhub Order Update",
+      "priority": 110,
+      "type": "food_delivery",
+      "detect": {
+        "sender_domain": "grubhub.com",
+        "subject_regex": "(?i)(order|delivery|delivered|on the way|picked up|receipt|confirm)"
+      },
+      "tags": {
+        "marketing": 0.1,
+        "financial": 0.2,
+        "action_required": 0.0
+      },
+      "extract": {
+        "status": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)delivered|order delivered": "delivered",
+            "(?i)on the way|driver is": "on_the_way",
+            "(?i)picked up": "picked_up",
+            "(?i)confirmed|order placed": "confirmed"
+          }
+        },
+        "restaurant": {
+          "source": "snippet",
+          "regex": "(?:from|at|order from)\\s+([A-Za-z0-9 &'\\-]{2,50}?)(?:\\s+is|\\s+has|[,.]|$)"
+        },
+        "total": {
+          "source": "snippet",
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        }
+      }
+    },
+    {
+      "id": "instacart-delivery",
+      "name": "Instacart Order Update",
+      "priority": 110,
+      "type": "food_delivery",
+      "detect": {
+        "sender_domain": "instacart.com",
+        "subject_regex": "(?i)(order|delivery|delivered|on the way|receipt|shopper|arriving)"
+      },
+      "tags": {
+        "marketing": 0.1,
+        "financial": 0.2,
+        "action_required": 0.0
+      },
+      "extract": {
+        "status": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)delivered|delivery complete": "delivered",
+            "(?i)on the way|heading your way": "on_the_way",
+            "(?i)shopping|shopper is": "shopping",
+            "(?i)confirmed|order placed": "confirmed"
+          }
+        },
+        "store": {
+          "source": "snippet",
+          "regex": "(?:from|at|shop at)\\s+([A-Za-z0-9 &'\\-]{2,50}?)(?:\\s+is|\\s+has|[,.]|$)"
+        },
+        "total": {
+          "source": "snippet",
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        },
+        "estimated_delivery": {
+          "source": "snippet",
+          "regex": "(?i)(?:arriving|scheduled|between)[:\\s]+([0-9:\\s apmAPM\\-]{5,25})"
+        }
+      }
+    },
+    {
+      "id": "apple-order",
+      "name": "Apple Order Confirmation",
+      "priority": 105,
+      "type": "order_confirm",
+      "detect": {
+        "sender_domain": "apple.com",
+        "subject_regex": "(?i)(order (confirmed|received|placed)|your receipt|invoice from apple|thank you for your (order|purchase))"
+      },
+      "tags": {
+        "financial": 0.4,
+        "marketing": 0.0,
+        "action_required": 0.0
+      },
+      "extract": {
+        "order_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:W|order)\\s*#?\\s*([A-Z0-9\\-]{8,})"
+        },
+        "total": {
+          "source": "snippet",
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        },
+        "item_hint": {
+          "source": "snippet",
+          "max_chars": 80
+        }
+      }
+    },
+    {
+      "id": "target-order",
+      "name": "Target Order Confirmation",
+      "priority": 105,
+      "type": "order_confirm",
+      "detect": {
+        "sender_domain": "target.com",
+        "subject_regex": "(?i)(order (confirmed|received|placed)|thank you for (your order|shopping)|your receipt)"
+      },
+      "tags": {
+        "financial": 0.3,
+        "marketing": 0.1,
+        "action_required": 0.0
+      },
+      "extract": {
+        "order_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:order|#)\\s*([A-Z0-9\\-]{6,})"
+        },
+        "total": {
+          "source": "snippet",
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        },
+        "item_hint": {
+          "source": "snippet",
+          "max_chars": 80
+        }
+      }
+    },
+    {
+      "id": "bestbuy-order",
+      "name": "Best Buy Order Confirmation",
+      "priority": 105,
+      "type": "order_confirm",
+      "detect": {
+        "sender_domain": "bestbuy.com",
+        "subject_regex": "(?i)(order (confirmed|received|placed)|thank you for (your order|your purchase)|your receipt)"
+      },
+      "tags": {
+        "financial": 0.3,
+        "marketing": 0.1,
+        "action_required": 0.0
+      },
+      "extract": {
+        "order_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:BBY|order|#)\\s*([0-9\\-]{6,})"
+        },
+        "total": {
+          "source": "snippet",
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        },
+        "item_hint": {
+          "source": "snippet",
+          "max_chars": 80
+        }
+      }
+    },
+    {
+      "id": "etsy-order",
+      "name": "Etsy Order Confirmation",
+      "priority": 105,
+      "type": "order_confirm",
+      "detect": {
+        "sender_domain": "etsy.com",
+        "subject_regex": "(?i)(order confirmed|you bought|receipt from|thank you for your (order|purchase))"
+      },
+      "tags": {
+        "financial": 0.3,
+        "marketing": 0.1,
+        "action_required": 0.0
+      },
+      "extract": {
+        "order_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "#(\\d{8,})"
+        },
+        "total": {
+          "source": "snippet",
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        },
+        "shop": {
+          "source": "snippet",
+          "regex": "(?:from|shop:?)\\s+([A-Za-z0-9 &']{2,40}?)(?:\\s+on|\\.|,|$)"
+        },
+        "item_hint": {
+          "source": "snippet",
+          "max_chars": 80
+        }
+      }
+    },
+    {
+      "id": "chewy-order",
+      "name": "Chewy Order Confirmation",
+      "priority": 105,
+      "type": "order_confirm",
+      "detect": {
+        "sender_domain": "chewy.com",
+        "subject_regex": "(?i)(order (confirmed|received|placed)|thank you for (your order|your purchase)|your receipt)"
+      },
+      "tags": {
+        "financial": 0.3,
+        "marketing": 0.1,
+        "action_required": 0.0
+      },
+      "extract": {
+        "order_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:order|#)\\s*([0-9\\-]{6,})"
+        },
+        "total": {
+          "source": "snippet",
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        },
+        "item_hint": {
+          "source": "snippet",
+          "max_chars": 80
+        }
+      }
+    },
+    {
+      "id": "nike-order",
+      "name": "Nike Order Confirmation",
+      "priority": 105,
+      "type": "order_confirm",
+      "detect": {
+        "sender_domain": "nike.com",
+        "subject_regex": "(?i)(order (confirmed|received|placed)|thank you for (your order|your purchase)|your receipt)"
+      },
+      "tags": {
+        "financial": 0.3,
+        "marketing": 0.2,
+        "action_required": 0.0
+      },
+      "extract": {
+        "order_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:order|#)\\s*([A-Z0-9\\-]{6,})"
+        },
+        "total": {
+          "source": "snippet",
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        },
+        "item_hint": {
+          "source": "snippet",
+          "max_chars": 80
+        }
+      }
+    },
+    {
+      "id": "rei-order",
+      "name": "REI Order Confirmation",
+      "priority": 105,
+      "type": "order_confirm",
+      "detect": {
+        "sender_domain": "rei.com",
+        "subject_regex": "(?i)(order (confirmed|received|placed)|thank you for (your order|your purchase)|your receipt)"
+      },
+      "tags": {
+        "financial": 0.3,
+        "marketing": 0.1,
+        "action_required": 0.0
+      },
+      "extract": {
+        "order_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:order|#)\\s*([A-Z0-9\\-]{6,})"
+        },
+        "total": {
+          "source": "snippet",
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        },
+        "item_hint": {
+          "source": "snippet",
+          "max_chars": 80
+        }
+      }
+    },
+    {
+      "id": "homedepot-order",
+      "name": "Home Depot Order Confirmation",
+      "priority": 105,
+      "type": "order_confirm",
+      "detect": {
+        "sender_domain": "homedepot.com",
+        "subject_regex": "(?i)(order (confirmed|received|placed)|thank you for (your order|your purchase)|your receipt)"
+      },
+      "tags": {
+        "financial": 0.3,
+        "marketing": 0.1,
+        "action_required": 0.0
+      },
+      "extract": {
+        "order_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:order|#|W)\\s*([A-Z0-9\\-]{6,})"
+        },
+        "total": {
+          "source": "snippet",
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        },
+        "item_hint": {
+          "source": "snippet",
+          "max_chars": 80
+        }
+      }
+    },
+    {
+      "id": "costco-order",
+      "name": "Costco Order Confirmation",
+      "priority": 105,
+      "type": "order_confirm",
+      "detect": {
+        "sender_domain": "costco.com",
+        "subject_regex": "(?i)(order (confirmed|received|placed)|thank you for (your order|your purchase)|your receipt)"
+      },
+      "tags": {
+        "financial": 0.3,
+        "marketing": 0.1,
+        "action_required": 0.0
+      },
+      "extract": {
+        "order_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:order|#)\\s*([A-Z0-9\\-]{6,})"
+        },
+        "total": {
+          "source": "snippet",
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        },
+        "item_hint": {
+          "source": "snippet",
+          "max_chars": 80
+        }
+      }
+    },
+    {
+      "id": "apple-receipt",
+      "name": "Apple Receipt (App Store / iCloud / Apple One)",
+      "priority": 108,
+      "type": "billing",
+      "detect": {
+        "sender_domain": "apple.com",
+        "subject_regex": "(?i)(your receipt from apple|invoice from apple|app store receipt|icloud storage|apple one|apple tv|apple music|apple arcade)"
+      },
+      "tags": {
+        "financial": 0.7,
+        "action_required": 0.0
+      },
+      "extract": {
+        "amount": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.\\d{2}"
+        },
+        "items": {
+          "source": "snippet",
+          "max_chars": 100
+        },
+        "date": {
+          "source": "snippet",
+          "regex": "\\b(\\d{1,2}/\\d{1,2}/\\d{2,4}|[A-Za-z]+ \\d+,?\\s*\\d{4})\\b"
+        },
+        "document_number": {
+          "source": "snippet",
+          "regex": "(?:document|order|invoice)\\s*#?\\s*([A-Z0-9]{8,})"
+        }
+      }
+    },
+    {
+      "id": "google-play-receipt",
+      "name": "Google Play / Google One Receipt",
+      "priority": 108,
+      "type": "billing",
+      "detect": {
+        "sender_contains": "google.com",
+        "subject_regex": "(?i)(receipt from google|your google (play|one|storage|workspace) (receipt|invoice|subscription)|payment confirmation)"
+      },
+      "tags": {
+        "financial": 0.7,
+        "action_required": 0.0
+      },
+      "extract": {
+        "amount": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.\\d{2}"
+        },
+        "service": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)google one|storage": "Google One",
+            "(?i)google play|play store": "Google Play",
+            "(?i)google workspace|gsuite|g suite": "Google Workspace",
+            "(?i)youtube premium|youtube music": "YouTube Premium"
+          }
+        },
+        "date": {
+          "source": "snippet",
+          "regex": "\\b(\\d{1,2}/\\d{1,2}/\\d{2,4}|[A-Za-z]+ \\d+,?\\s*\\d{4})\\b"
+        }
+      }
+    },
+    {
+      "id": "microsoft-receipt",
+      "name": "Microsoft 365 / Xbox Receipt",
+      "priority": 108,
+      "type": "billing",
+      "detect": {
+        "sender_contains": "microsoft.com",
+        "subject_regex": "(?i)(receipt|invoice|subscription|payment confirmation|microsoft 365|xbox|office 365|azure)"
+      },
+      "tags": {
+        "financial": 0.7,
+        "action_required": 0.0
+      },
+      "extract": {
+        "amount": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.\\d{2}"
+        },
+        "service": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)microsoft 365|office 365": "Microsoft 365",
+            "(?i)xbox": "Xbox",
+            "(?i)azure": "Azure",
+            "(?i)onedrive": "OneDrive"
+          }
+        },
+        "date": {
+          "source": "snippet",
+          "regex": "\\b(\\d{1,2}/\\d{1,2}/\\d{2,4}|[A-Za-z]+ \\d+,?\\s*\\d{4})\\b"
+        }
+      }
+    },
+    {
+      "id": "netflix-billing",
+      "name": "Netflix Billing",
+      "priority": 105,
+      "type": "billing",
+      "detect": {
+        "sender_contains": "netflix.com",
+        "subject_regex": "(?i)(payment|receipt|invoice|membership|subscription|your (bill|plan))"
+      },
+      "tags": {
+        "financial": 0.6,
+        "action_required": 0.0
+      },
+      "extract": {
+        "amount": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.\\d{2}"
+        },
+        "plan": {
+          "source": "snippet",
+          "regex": "(?:plan|membership)[:\\s]+([A-Za-z ]{3,30})"
+        },
+        "date": {
+          "source": "snippet",
+          "regex": "\\b(\\d{1,2}/\\d{1,2}/\\d{2,4}|[A-Za-z]+ \\d+,?\\s*\\d{4})\\b"
+        }
+      }
+    },
+    {
+      "id": "spotify-billing",
+      "name": "Spotify Billing / Receipt",
+      "priority": 105,
+      "type": "billing",
+      "detect": {
+        "sender_contains": "spotify.com",
+        "subject_regex": "(?i)(payment|receipt|invoice|subscription|your (premium|plan|bill)|renewed)"
+      },
+      "tags": {
+        "financial": 0.6,
+        "action_required": 0.0
+      },
+      "extract": {
+        "amount": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.\\d{2}"
+        },
+        "plan": {
+          "source": "snippet",
+          "regex": "(?:plan|subscription)[:\\s]+([A-Za-z ]{3,30})"
+        },
+        "date": {
+          "source": "snippet",
+          "regex": "\\b(\\d{1,2}/\\d{1,2}/\\d{2,4}|[A-Za-z]+ \\d+,?\\s*\\d{4})\\b"
+        }
+      }
+    },
+    {
+      "id": "disney-plus-billing",
+      "name": "Disney+ / Hulu Billing",
+      "priority": 105,
+      "type": "billing",
+      "detect": {
+        "sender_contains": "disneyplus.com",
+        "subject_regex": "(?i)(payment|receipt|invoice|subscription|disney.?\\+|hulu|your (plan|bill))"
+      },
+      "tags": {
+        "financial": 0.6,
+        "action_required": 0.0
+      },
+      "extract": {
+        "amount": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.\\d{2}"
+        },
+        "service": {
+          "source": [
+            "subject",
+            "snippet",
+            "sender"
+          ],
+          "enum_map": {
+            "(?i)disney": "Disney+",
+            "(?i)hulu": "Hulu",
+            "(?i)espn": "ESPN+"
+          }
+        },
+        "date": {
+          "source": "snippet",
+          "regex": "\\b(\\d{1,2}/\\d{1,2}/\\d{2,4}|[A-Za-z]+ \\d+,?\\s*\\d{4})\\b"
+        }
+      }
+    },
+    {
+      "id": "adobe-billing",
+      "name": "Adobe Creative Cloud Billing",
+      "priority": 105,
+      "type": "billing",
+      "detect": {
+        "sender_contains": "adobe.com",
+        "subject_regex": "(?i)(payment|receipt|invoice|subscription|creative cloud|plan|your (bill|order))"
+      },
+      "tags": {
+        "financial": 0.7,
+        "action_required": 0.0
+      },
+      "extract": {
+        "amount": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.\\d{2}"
+        },
+        "plan": {
+          "source": "snippet",
+          "regex": "(?:plan|subscription|product)[:\\s]+([A-Za-z &]{3,40})"
+        },
+        "date": {
+          "source": "snippet",
+          "regex": "\\b(\\d{1,2}/\\d{1,2}/\\d{2,4}|[A-Za-z]+ \\d+,?\\s*\\d{4})\\b"
+        }
+      }
+    },
+    {
+      "id": "xfinity-billing",
+      "name": "Comcast / Xfinity Billing",
+      "priority": 105,
+      "type": "billing",
+      "detect": {
+        "sender_contains": "xfinity.com",
+        "subject_regex": "(?i)(bill|invoice|payment|statement|amount due|your (bill|statement) is ready|comcast|xfinity)"
+      },
+      "tags": {
+        "financial": 0.8,
+        "action_required": 0.4
+      },
+      "extract": {
+        "amount": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.\\d{2}"
+        },
+        "due_date": {
+          "source": "snippet",
+          "regex": "(?:due|by|pay by)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\d{1,2}/\\d{1,2}/\\d{2,4})"
+        },
+        "account_hint": {
+          "source": "snippet",
+          "regex": "(?:account|ending in)\\s*[*x]*(\\d{4})"
+        }
+      }
+    },
+    {
+      "id": "verizon-billing",
+      "name": "Verizon Wireless Billing",
+      "priority": 105,
+      "type": "billing",
+      "detect": {
+        "sender_contains": "verizon.com",
+        "subject_regex": "(?i)(bill|invoice|payment|statement|amount due|your (bill|statement) is ready)"
+      },
+      "tags": {
+        "financial": 0.8,
+        "action_required": 0.4
+      },
+      "extract": {
+        "amount": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.\\d{2}"
+        },
+        "due_date": {
+          "source": "snippet",
+          "regex": "(?:due|by|pay by)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\d{1,2}/\\d{1,2}/\\d{2,4})"
+        },
+        "account_hint": {
+          "source": "snippet",
+          "regex": "(?:account|ending in|line)\\s*[*x]*(\\d{4})"
+        }
+      }
+    },
+    {
+      "id": "att-billing",
+      "name": "AT&T Billing",
+      "priority": 105,
+      "type": "billing",
+      "detect": {
+        "sender_contains": "att.com",
+        "subject_regex": "(?i)(bill|invoice|payment|statement|amount due|your (bill|statement) is ready)"
+      },
+      "tags": {
+        "financial": 0.8,
+        "action_required": 0.4
+      },
+      "extract": {
+        "amount": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.\\d{2}"
+        },
+        "due_date": {
+          "source": "snippet",
+          "regex": "(?:due|by|pay by)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\d{1,2}/\\d{1,2}/\\d{2,4})"
+        },
+        "account_hint": {
+          "source": "snippet",
+          "regex": "(?:account|ending in)\\s*[*x]*(\\d{4})"
+        }
+      }
+    },
+    {
+      "id": "tmobile-billing",
+      "name": "T-Mobile Billing",
+      "priority": 105,
+      "type": "billing",
+      "detect": {
+        "sender_contains": "t-mobile.com",
+        "subject_regex": "(?i)(bill|invoice|payment|statement|amount due|your (bill|statement) is ready)"
+      },
+      "tags": {
+        "financial": 0.8,
+        "action_required": 0.4
+      },
+      "extract": {
+        "amount": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.\\d{2}"
+        },
+        "due_date": {
+          "source": "snippet",
+          "regex": "(?:due|by|pay by)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\d{1,2}/\\d{1,2}/\\d{2,4})"
+        },
+        "account_hint": {
+          "source": "snippet",
+          "regex": "(?:account|line)\\s*[*x]*(\\d{4})"
+        }
+      }
+    },
+    {
+      "id": "generic-utility-bill",
+      "name": "Generic Utility Bill",
+      "priority": 70,
+      "type": "billing",
+      "detect": {
+        "subject_regex": "(?i)(electric|gas|water|utility|energy|power company|your (electric|gas|water|utility) (bill|statement) (is|has)|utility (bill|statement|payment))"
+      },
+      "tags": {
+        "financial": 0.7,
+        "action_required": 0.3
+      },
+      "extract": {
+        "amount": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.\\d{2}"
+        },
+        "due_date": {
+          "source": "snippet",
+          "regex": "(?:due|by|pay by)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\d{1,2}/\\d{1,2}/\\d{2,4})"
+        },
+        "provider": {
+          "source": "from_name",
+          "max_chars": 40
+        }
+      }
+    },
+    {
+      "id": "generic-insurance-billing",
+      "name": "Generic Insurance Billing",
+      "priority": 68,
+      "type": "billing",
+      "detect": {
+        "subject_regex": "(?i)(insurance (premium|payment|bill|statement|invoice|renewal)|your (policy|premium) (is due|renewal|statement)|auto|home|health|life|renters insurance)"
+      },
+      "tags": {
+        "financial": 0.8,
+        "action_required": 0.4
+      },
+      "extract": {
+        "amount": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.\\d{2}"
+        },
+        "due_date": {
+          "source": "snippet",
+          "regex": "(?:due|by|pay by|renewal)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\d{1,2}/\\d{1,2}/\\d{2,4})"
+        },
+        "policy_number": {
+          "source": "snippet",
+          "regex": "(?:policy|policy #|policy number)[:\\s#]+([A-Z0-9\\-]{5,20})"
+        },
+        "provider": {
+          "source": "from_name",
+          "max_chars": 40
+        }
+      }
+    },
+    {
+      "id": "generic-subscription-renewed",
+      "name": "Generic Subscription Renewed / Payment Processed",
+      "priority": 63,
+      "type": "billing",
+      "detect": {
+        "subject_regex": "(?i)(subscription (renewed|has been renewed|successfully renewed|renewal complete)|payment (processed|received|confirmed|successful)|your (subscription|membership|plan) has (been renewed|renewed|been charged))"
+      },
+      "tags": {
+        "financial": 0.6,
+        "action_required": 0.0
+      },
+      "extract": {
+        "amount": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.\\d{2}"
+        },
+        "service": {
+          "source": "from_name",
+          "max_chars": 40
+        },
+        "next_billing": {
+          "source": "snippet",
+          "regex": "(?:next (billing|charge|renewal|payment)|renews)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\d{1,2}/\\d{1,2}/\\d{2,4})"
+        }
+      }
+    },
+    {
+      "id": "chase-statement",
+      "name": "Chase Bank Statement",
+      "priority": 108,
+      "type": "bank_statement",
+      "detect": {
+        "sender_contains": "chase.com",
+        "subject_regex": "(?i)(statement|account summary|account alert|transaction|balance|payment due|activity|available|deposit|withdrawal)"
+      },
+      "tags": {
+        "financial": 0.9,
+        "action_required": 0.3
+      },
+      "extract": {
+        "alert_type": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)statement ready|e-statement": "statement_ready",
+            "(?i)payment due|amount due": "payment_due",
+            "(?i)large (transaction|purchase|charge)": "large_transaction",
+            "(?i)low balance": "low_balance",
+            "(?i)deposit": "deposit",
+            "(?i)fraud|suspicious|unauthorized": "fraud_alert"
+          }
+        },
+        "amount": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        },
+        "account_hint": {
+          "source": "snippet",
+          "regex": "(?:account|ending in|\\.\\.\\.)\\s*[*x.]*([0-9]{4})\\b"
+        }
+      }
+    },
+    {
+      "id": "bofa-statement",
+      "name": "Bank of America Statement / Alert",
+      "priority": 108,
+      "type": "bank_statement",
+      "detect": {
+        "sender_contains": "bankofamerica.com",
+        "subject_regex": "(?i)(statement|account alert|account activity|balance|payment|deposit|withdrawal|bank of america)"
+      },
+      "tags": {
+        "financial": 0.9,
+        "action_required": 0.3
+      },
+      "extract": {
+        "alert_type": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)statement ready|e-statement": "statement_ready",
+            "(?i)payment due|amount due": "payment_due",
+            "(?i)low balance": "low_balance",
+            "(?i)deposit": "deposit",
+            "(?i)fraud|suspicious|unauthorized": "fraud_alert"
+          }
+        },
+        "amount": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        },
+        "account_hint": {
+          "source": "snippet",
+          "regex": "(?:account|ending in|\\.\\.\\.)\\s*[*x.]*([0-9]{4})\\b"
+        }
+      }
+    },
+    {
+      "id": "capitalone-statement",
+      "name": "Capital One Statement / Alert",
+      "priority": 108,
+      "type": "bank_statement",
+      "detect": {
+        "sender_contains": "capitalone.com",
+        "subject_regex": "(?i)(statement|account alert|payment|balance|transaction|spending|deposit|capital one)"
+      },
+      "tags": {
+        "financial": 0.9,
+        "action_required": 0.3
+      },
+      "extract": {
+        "alert_type": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)statement ready": "statement_ready",
+            "(?i)payment due|minimum payment": "payment_due",
+            "(?i)low balance": "low_balance",
+            "(?i)large (transaction|purchase)": "large_transaction",
+            "(?i)fraud|suspicious": "fraud_alert"
+          }
+        },
+        "amount": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        },
+        "account_hint": {
+          "source": "snippet",
+          "regex": "(?:account|ending in|card)\\s*[*x.]*([0-9]{4})\\b"
+        }
+      }
+    },
+    {
+      "id": "amex-statement",
+      "name": "American Express Statement / Alert",
+      "priority": 108,
+      "type": "bank_statement",
+      "detect": {
+        "sender_contains": "americanexpress.com",
+        "subject_regex": "(?i)(statement|account alert|payment|balance|transaction|amex)"
+      },
+      "tags": {
+        "financial": 0.9,
+        "action_required": 0.4
+      },
+      "extract": {
+        "alert_type": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)statement ready|new statement": "statement_ready",
+            "(?i)payment due|minimum payment": "payment_due",
+            "(?i)large (charge|transaction|purchase)": "large_transaction",
+            "(?i)fraud|suspicious|unusual": "fraud_alert"
+          }
+        },
+        "amount": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        },
+        "account_hint": {
+          "source": "snippet",
+          "regex": "(?:card|ending in|account)\\s*[*x.]*([0-9]{4,5})\\b"
+        }
+      }
+    },
+    {
+      "id": "discover-statement",
+      "name": "Discover Card Statement / Alert",
+      "priority": 108,
+      "type": "bank_statement",
+      "detect": {
+        "sender_contains": "discover.com",
+        "subject_regex": "(?i)(statement|account alert|payment|balance|transaction|cashback|discover)"
+      },
+      "tags": {
+        "financial": 0.9,
+        "action_required": 0.3
+      },
+      "extract": {
+        "alert_type": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)statement ready": "statement_ready",
+            "(?i)payment due|minimum payment": "payment_due",
+            "(?i)cashback|reward": "reward",
+            "(?i)fraud|suspicious": "fraud_alert"
+          }
+        },
+        "amount": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        },
+        "account_hint": {
+          "source": "snippet",
+          "regex": "(?:card|ending in|account)\\s*[*x.]*([0-9]{4})\\b"
+        }
+      }
+    },
+    {
+      "id": "fidelity-investment",
+      "name": "Fidelity Investment Notification",
+      "priority": 108,
+      "type": "investment",
+      "detect": {
+        "sender_contains": "fidelity.com",
+        "subject_regex": "(?i)(statement|trade (confirm|executed)|dividend|portfolio|account|balance|transaction|investment)"
+      },
+      "tags": {
+        "investment": 0.9,
+        "financial": 0.7,
+        "action_required": 0.2
+      },
+      "extract": {
+        "notification_type": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)trade confirm|order (filled|executed|placed)": "trade_confirmation",
+            "(?i)dividend (received|reinvested|payment)": "dividend",
+            "(?i)statement ready|account statement": "statement",
+            "(?i)portfolio (update|summary)": "portfolio_update"
+          }
+        },
+        "amount": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        },
+        "account_hint": {
+          "source": "snippet",
+          "regex": "(?:account|ending in|\\.\\.\\.)\\s*[*x.]*([0-9]{4})\\b"
+        }
+      }
+    },
+    {
+      "id": "schwab-investment",
+      "name": "Charles Schwab Investment Notification",
+      "priority": 108,
+      "type": "investment",
+      "detect": {
+        "sender_contains": "schwab.com",
+        "subject_regex": "(?i)(statement|trade|dividend|portfolio|account|balance|transaction|investment|order)"
+      },
+      "tags": {
+        "investment": 0.9,
+        "financial": 0.7,
+        "action_required": 0.2
+      },
+      "extract": {
+        "notification_type": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)trade confirm|order (filled|executed)": "trade_confirmation",
+            "(?i)dividend": "dividend",
+            "(?i)statement ready|account statement": "statement",
+            "(?i)portfolio (update|summary)": "portfolio_update"
+          }
+        },
+        "amount": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        },
+        "account_hint": {
+          "source": "snippet",
+          "regex": "(?:account|ending in|\\.\\.\\.)\\s*[*x.]*([0-9]{4})\\b"
+        }
+      }
+    },
+    {
+      "id": "robinhood-notification",
+      "name": "Robinhood Trade / Account Notification",
+      "priority": 108,
+      "type": "investment",
+      "detect": {
+        "sender_contains": "robinhood.com",
+        "subject_regex": "(?i)(trade|order|dividend|statement|account|balance|deposit|withdrawal|crypto|stock)"
+      },
+      "tags": {
+        "investment": 0.9,
+        "financial": 0.6,
+        "action_required": 0.3
+      },
+      "extract": {
+        "notification_type": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)order (filled|executed|completed)": "trade_confirmation",
+            "(?i)dividend": "dividend",
+            "(?i)deposit|transfer": "transfer",
+            "(?i)crypto": "crypto"
+          }
+        },
+        "ticker": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\b([A-Z]{1,5})\\b(?=\\s*stock|\\s*share|\\s*crypto|\\s*order)"
+        },
+        "amount": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        }
+      }
+    },
+    {
+      "id": "creditkarma-alert",
+      "name": "Credit Karma / Credit Score Alert",
+      "priority": 105,
+      "type": "financial_alert",
+      "detect": {
+        "sender_contains": "creditkarma.com",
+        "subject_regex": "(?i)(credit score|credit report|credit (update|change|alert)|experian|equifax|transunion|your score (changed|dropped|went up|increased|decreased))"
+      },
+      "tags": {
+        "financial": 0.8,
+        "action_required": 0.5
+      },
+      "extract": {
+        "score_change": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:score|went|changed|dropped|increased|up|down)[:\\s]+([\\+\\-]?\\d+)"
+        },
+        "current_score": {
+          "source": "snippet",
+          "regex": "(?:score|credit score)[:\\s]+(\\d{3})"
+        },
+        "bureau": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)experian": "Experian",
+            "(?i)equifax": "Equifax",
+            "(?i)transunion|trans union": "TransUnion"
+          }
+        }
+      }
+    },
+    {
+      "id": "turbotax-notification",
+      "name": "TurboTax / Tax Filing Notification",
+      "priority": 105,
+      "type": "tax",
+      "detect": {
+        "sender_contains": "turbotax.com",
+        "subject_regex": "(?i)(tax (return|refund|filing|accepted|rejected|ready|status)|turbotax|h&r block|tax season|irs|w-2|1099)"
+      },
+      "tags": {
+        "financial": 0.9,
+        "action_required": 0.6
+      },
+      "extract": {
+        "status": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)\\baccepted\\b|return accepted": "accepted",
+            "(?i)\\brejected\\b|return rejected": "rejected",
+            "(?i)refund (approved|sent|deposited|issued)": "refund_approved",
+            "(?i)ready to file|time to file": "ready_to_file",
+            "(?i)documents? ready|tax documents": "documents_ready"
+          }
+        },
+        "refund_amount": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:refund|return)[:\\s]+\\$([\\d,]+\\.?\\d*)"
+        },
+        "tax_year": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\b(20\\d{2})\\b"
+        }
+      }
+    },
+    {
+      "id": "irs-notice",
+      "name": "IRS Notice / Government Tax Communication",
+      "priority": 110,
+      "type": "tax",
+      "detect": {
+        "sender_contains": "irs.gov",
+        "subject_regex": "(?i)(irs|internal revenue|notice|refund|tax (return|balance|payment|due)|cp\\d{2,4}|letter)"
+      },
+      "tags": {
+        "financial": 0.9,
+        "action_required": 0.9
+      },
+      "extract": {
+        "notice_type": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:notice|letter|form)\\s*([A-Z]{0,2}\\d{2,6})"
+        },
+        "amount": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        },
+        "tax_year": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\b(20\\d{2})\\b"
+        },
+        "action_hint": {
+          "source": "snippet",
+          "max_chars": 100
+        }
+      }
+    },
+    {
+      "id": "united-booking",
+      "name": "United Airlines Booking / Flight Update",
+      "priority": 110,
+      "type": "travel_flight",
+      "detect": {
+        "sender_contains": "united.com",
+        "subject_regex": "(?i)(booking (confirmation|confirmed)|flight (confirmation|reminder|update|change|canceled|status)|itinerary|check.in|boarding pass|gate (change|assignment))"
+      },
+      "tags": {
+        "travel": 0.95,
+        "action_required": 0.4
+      },
+      "extract": {
+        "confirmation_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:confirmation|record locator|pnr)[:\\s#]+([A-Z0-9]{5,8})"
+        },
+        "flight_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:flight|UA|United)\\s*#?(\\d{2,4})"
+        },
+        "departure": {
+          "source": "snippet",
+          "regex": "(?:from|departs?|departing)[:\\s]+([A-Z]{3}|[A-Za-z ]{3,30})"
+        },
+        "destination": {
+          "source": "snippet",
+          "regex": "(?:to|arrives?|arriving)[:\\s]+([A-Z]{3}|[A-Za-z ]{3,30})"
+        },
+        "date": {
+          "source": "snippet",
+          "regex": "\\b(\\w+ \\d+,?\\s*\\d{0,4}|\\d{1,2}/\\d{1,2}/\\d{2,4})\\b"
+        }
+      }
+    },
+    {
+      "id": "delta-booking",
+      "name": "Delta Airlines Booking / Flight Update",
+      "priority": 110,
+      "type": "travel_flight",
+      "detect": {
+        "sender_contains": "delta.com",
+        "subject_regex": "(?i)(booking (confirmation|confirmed)|flight (confirmation|reminder|update|change|canceled)|itinerary|check.in|boarding pass|gate (change|assignment))"
+      },
+      "tags": {
+        "travel": 0.95,
+        "action_required": 0.4
+      },
+      "extract": {
+        "confirmation_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:confirmation|record locator|pnr)[:\\s#]+([A-Z0-9]{5,8})"
+        },
+        "flight_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:flight|DL)\\s*#?(\\d{2,4})"
+        },
+        "departure": {
+          "source": "snippet",
+          "regex": "(?:from|departs?|departing)[:\\s]+([A-Z]{3}|[A-Za-z ]{3,30})"
+        },
+        "destination": {
+          "source": "snippet",
+          "regex": "(?:to|arrives?|arriving)[:\\s]+([A-Z]{3}|[A-Za-z ]{3,30})"
+        },
+        "date": {
+          "source": "snippet",
+          "regex": "\\b(\\w+ \\d+,?\\s*\\d{0,4}|\\d{1,2}/\\d{1,2}/\\d{2,4})\\b"
+        }
+      }
+    },
+    {
+      "id": "southwest-booking",
+      "name": "Southwest Airlines Booking / Check-in",
+      "priority": 110,
+      "type": "travel_flight",
+      "detect": {
+        "sender_contains": "southwest.com",
+        "subject_regex": "(?i)(booking (confirmation|confirmed)|flight (confirmation|reminder|update)|itinerary|check.in|boarding pass|confirmation number)"
+      },
+      "tags": {
+        "travel": 0.95,
+        "action_required": 0.4
+      },
+      "extract": {
+        "confirmation_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:confirmation|record locator)[:\\s#]+([A-Z0-9]{5,8})"
+        },
+        "flight_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:flight|WN)\\s*#?(\\d{2,4})"
+        },
+        "departure": {
+          "source": "snippet",
+          "regex": "(?:from|departs?)[:\\s]+([A-Z]{3}|[A-Za-z ]{3,30})"
+        },
+        "destination": {
+          "source": "snippet",
+          "regex": "(?:to|arrives?)[:\\s]+([A-Z]{3}|[A-Za-z ]{3,30})"
+        },
+        "date": {
+          "source": "snippet",
+          "regex": "\\b(\\w+ \\d+,?\\s*\\d{0,4}|\\d{1,2}/\\d{1,2}/\\d{2,4})\\b"
+        }
+      }
+    },
+    {
+      "id": "american-airlines-booking",
+      "name": "American Airlines Booking / Flight Update",
+      "priority": 110,
+      "type": "travel_flight",
+      "detect": {
+        "sender_contains": "aa.com",
+        "subject_regex": "(?i)(booking (confirmation|confirmed)|flight (confirmation|reminder|update|change|canceled)|itinerary|check.in|boarding pass|gate change)"
+      },
+      "tags": {
+        "travel": 0.95,
+        "action_required": 0.4
+      },
+      "extract": {
+        "confirmation_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:confirmation|record locator|pnr)[:\\s#]+([A-Z0-9]{5,8})"
+        },
+        "flight_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:flight|AA)\\s*#?(\\d{2,4})"
+        },
+        "departure": {
+          "source": "snippet",
+          "regex": "(?:from|departs?)[:\\s]+([A-Z]{3}|[A-Za-z ]{3,30})"
+        },
+        "destination": {
+          "source": "snippet",
+          "regex": "(?:to|arrives?)[:\\s]+([A-Z]{3}|[A-Za-z ]{3,30})"
+        },
+        "date": {
+          "source": "snippet",
+          "regex": "\\b(\\w+ \\d+,?\\s*\\d{0,4}|\\d{1,2}/\\d{1,2}/\\d{2,4})\\b"
+        }
+      }
+    },
+    {
+      "id": "jetblue-booking",
+      "name": "JetBlue Airways Booking / Update",
+      "priority": 110,
+      "type": "travel_flight",
+      "detect": {
+        "sender_contains": "jetblue.com",
+        "subject_regex": "(?i)(booking (confirmation|confirmed)|flight (confirmation|reminder|update|change)|itinerary|check.in|boarding pass)"
+      },
+      "tags": {
+        "travel": 0.95,
+        "action_required": 0.4
+      },
+      "extract": {
+        "confirmation_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:confirmation|record locator)[:\\s#]+([A-Z0-9]{5,8})"
+        },
+        "flight_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:flight|B6)\\s*#?(\\d{2,4})"
+        },
+        "departure": {
+          "source": "snippet",
+          "regex": "(?:from|departs?)[:\\s]+([A-Z]{3}|[A-Za-z ]{3,30})"
+        },
+        "destination": {
+          "source": "snippet",
+          "regex": "(?:to|arrives?)[:\\s]+([A-Z]{3}|[A-Za-z ]{3,30})"
+        },
+        "date": {
+          "source": "snippet",
+          "regex": "\\b(\\w+ \\d+,?\\s*\\d{0,4}|\\d{1,2}/\\d{1,2}/\\d{2,4})\\b"
+        }
+      }
+    },
+    {
+      "id": "generic-flight-checkin",
+      "name": "Generic Flight Check-in Reminder",
+      "priority": 78,
+      "type": "travel_flight",
+      "detect": {
+        "subject_regex": "(?i)(check.in (is )?now open|time to check in|online check.in|check in for your flight|check in (reminder|available))"
+      },
+      "tags": {
+        "travel": 0.95,
+        "action_required": 0.8
+      },
+      "extract": {
+        "confirmation_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:confirmation|record locator|pnr)[:\\s#]+([A-Z0-9]{5,8})"
+        },
+        "flight_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:flight)\\s+([A-Z]{2}\\d{2,4})"
+        },
+        "date": {
+          "source": "snippet",
+          "regex": "\\b(\\w+ \\d+,?\\s*\\d{0,4}|\\d{1,2}/\\d{1,2}/\\d{2,4})\\b"
+        },
+        "carrier": {
+          "source": "from_name",
+          "max_chars": 30
+        }
+      }
+    },
+    {
+      "id": "marriott-booking",
+      "name": "Marriott Hotel Booking Confirmation",
+      "priority": 110,
+      "type": "travel_hotel",
+      "detect": {
+        "sender_contains": "marriott.com",
+        "subject_regex": "(?i)(reservation (confirmed|confirmation)|booking (confirmed|confirmation)|hotel (confirmation|reservation)|check.in|stay confirmation)"
+      },
+      "tags": {
+        "travel": 0.9,
+        "financial": 0.3,
+        "action_required": 0.2
+      },
+      "extract": {
+        "confirmation_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:confirmation|reservation)[:\\s#]+([A-Z0-9]{5,12})"
+        },
+        "hotel_name": {
+          "source": "snippet",
+          "regex": "(?:at|hotel|property)[:\\s]+([A-Za-z &]{5,50}?)(?:\\n|,|\\.)"
+        },
+        "check_in": {
+          "source": "snippet",
+          "regex": "(?:check.in|arrival)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\d{1,2}/\\d{1,2}/\\d{2,4})"
+        },
+        "check_out": {
+          "source": "snippet",
+          "regex": "(?:check.out|departure)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\d{1,2}/\\d{1,2}/\\d{2,4})"
+        },
+        "total": {
+          "source": "snippet",
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        }
+      }
+    },
+    {
+      "id": "hilton-booking",
+      "name": "Hilton Hotel Booking Confirmation",
+      "priority": 110,
+      "type": "travel_hotel",
+      "detect": {
+        "sender_contains": "hilton.com",
+        "subject_regex": "(?i)(reservation (confirmed|confirmation)|booking (confirmed|confirmation)|hotel (confirmation|reservation)|check.in|stay confirmation)"
+      },
+      "tags": {
+        "travel": 0.9,
+        "financial": 0.3,
+        "action_required": 0.2
+      },
+      "extract": {
+        "confirmation_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:confirmation|reservation)[:\\s#]+([A-Z0-9]{5,12})"
+        },
+        "hotel_name": {
+          "source": "snippet",
+          "regex": "(?:at|hotel|property)[:\\s]+([A-Za-z &]{5,50}?)(?:\\n|,|\\.)"
+        },
+        "check_in": {
+          "source": "snippet",
+          "regex": "(?:check.in|arrival)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\d{1,2}/\\d{1,2}/\\d{2,4})"
+        },
+        "check_out": {
+          "source": "snippet",
+          "regex": "(?:check.out|departure)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\d{1,2}/\\d{1,2}/\\d{2,4})"
+        },
+        "total": {
+          "source": "snippet",
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        }
+      }
+    },
+    {
+      "id": "airbnb-booking",
+      "name": "Airbnb Booking Confirmation",
+      "priority": 110,
+      "type": "travel_hotel",
+      "detect": {
+        "sender_contains": "airbnb.com",
+        "subject_regex": "(?i)(booking (confirmed|confirmation|request)|reservation (confirmed|confirmation)|trip (confirmed|confirmation)|check.in|hosting)"
+      },
+      "tags": {
+        "travel": 0.9,
+        "financial": 0.3,
+        "action_required": 0.3
+      },
+      "extract": {
+        "confirmation_code": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:confirmation|code)[:\\s]+([A-Z0-9]{8,12})"
+        },
+        "property": {
+          "source": "snippet",
+          "regex": "(?:at|listing|place)[:\\s]+([A-Za-z0-9 &',\\-]{5,60}?)(?:\\n|,)"
+        },
+        "check_in": {
+          "source": "snippet",
+          "regex": "(?:check.in|arrival)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\d{1,2}/\\d{1,2}/\\d{2,4})"
+        },
+        "check_out": {
+          "source": "snippet",
+          "regex": "(?:check.out|departure)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\d{1,2}/\\d{1,2}/\\d{2,4})"
+        },
+        "total": {
+          "source": "snippet",
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        }
+      }
+    },
+    {
+      "id": "vrbo-booking",
+      "name": "VRBO Booking Confirmation",
+      "priority": 110,
+      "type": "travel_hotel",
+      "detect": {
+        "sender_contains": "vrbo.com",
+        "subject_regex": "(?i)(booking (confirmed|confirmation)|reservation (confirmed|confirmation)|trip (confirmed|confirmation)|check.in)"
+      },
+      "tags": {
+        "travel": 0.9,
+        "financial": 0.3,
+        "action_required": 0.2
+      },
+      "extract": {
+        "confirmation_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:confirmation|reservation|booking)[:\\s#]+([A-Z0-9\\-]{5,15})"
+        },
+        "property": {
+          "source": "snippet",
+          "regex": "(?:at|property)[:\\s]+([A-Za-z0-9 &',\\-]{5,60}?)(?:\\n|,)"
+        },
+        "check_in": {
+          "source": "snippet",
+          "regex": "(?:check.in|arrival)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\d{1,2}/\\d{1,2}/\\d{2,4})"
+        },
+        "check_out": {
+          "source": "snippet",
+          "regex": "(?:check.out|departure)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\d{1,2}/\\d{1,2}/\\d{2,4})"
+        },
+        "total": {
+          "source": "snippet",
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        }
+      }
+    },
+    {
+      "id": "enterprise-rental",
+      "name": "Enterprise / National Car Rental Confirmation",
+      "priority": 108,
+      "type": "travel_car_rental",
+      "detect": {
+        "sender_contains": "enterprise.com",
+        "subject_regex": "(?i)(rental (confirmation|confirmed|receipt|return)|car rental|reservation (confirmed|confirmation)|vehicle (reservation|confirmation))"
+      },
+      "tags": {
+        "travel": 0.9,
+        "financial": 0.2,
+        "action_required": 0.2
+      },
+      "extract": {
+        "confirmation_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:confirmation|reservation)[:\\s#]+([A-Z0-9\\-]{5,15})"
+        },
+        "pickup_date": {
+          "source": "snippet",
+          "regex": "(?:pickup|pick.up|start)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\d{1,2}/\\d{1,2}/\\d{2,4})"
+        },
+        "return_date": {
+          "source": "snippet",
+          "regex": "(?:return|drop.off|end)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\d{1,2}/\\d{1,2}/\\d{2,4})"
+        },
+        "total": {
+          "source": "snippet",
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        }
+      }
+    },
+    {
+      "id": "hertz-rental",
+      "name": "Hertz Car Rental Confirmation",
+      "priority": 108,
+      "type": "travel_car_rental",
+      "detect": {
+        "sender_contains": "hertz.com",
+        "subject_regex": "(?i)(rental (confirmation|confirmed|receipt|return)|car rental|reservation (confirmed|confirmation))"
+      },
+      "tags": {
+        "travel": 0.9,
+        "financial": 0.2,
+        "action_required": 0.2
+      },
+      "extract": {
+        "confirmation_number": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:confirmation|reservation)[:\\s#]+([A-Z0-9\\-]{5,15})"
+        },
+        "pickup_date": {
+          "source": "snippet",
+          "regex": "(?:pickup|pick.up|start|out)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\d{1,2}/\\d{1,2}/\\d{2,4})"
+        },
+        "return_date": {
+          "source": "snippet",
+          "regex": "(?:return|drop.off|in|end)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{0,4}|\\d{1,2}/\\d{1,2}/\\d{2,4})"
+        },
+        "total": {
+          "source": "snippet",
+          "regex": "\\$[\\d,]+\\.?\\d*"
+        }
+      }
+    },
+    {
+      "id": "uber-receipt",
+      "name": "Uber Trip Receipt",
+      "priority": 108,
+      "type": "rideshare_receipt",
+      "detect": {
+        "sender_domain": "uber.com",
+        "subject_regex": "(?i)(trip receipt|your receipt|your ride|uber (trip|ride)|thanks for riding)"
+      },
+      "tags": {
+        "travel": 0.5,
+        "financial": 0.5,
+        "action_required": 0.0
+      },
+      "extract": {
+        "total": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.\\d{2}"
+        },
+        "route": {
+          "source": "snippet",
+          "regex": "(?:from|pickup)[:\\s]+([A-Za-z0-9 ,]{3,50}?)\\s+(?:to|\u2192|->)\\s+([A-Za-z0-9 ,]{3,50})"
+        },
+        "date": {
+          "source": "snippet",
+          "regex": "\\b(\\d{1,2}/\\d{1,2}/\\d{2,4}|[A-Za-z]+ \\d+,?\\s*\\d{4})\\b"
+        },
+        "duration": {
+          "source": "snippet",
+          "regex": "(\\d+ min(?:ute)?s?)"
+        }
+      }
+    },
+    {
+      "id": "lyft-receipt",
+      "name": "Lyft Trip Receipt",
+      "priority": 108,
+      "type": "rideshare_receipt",
+      "detect": {
+        "sender_contains": "lyft.com",
+        "subject_regex": "(?i)(trip receipt|your receipt|your ride|lyft (trip|ride)|thanks for riding)"
+      },
+      "tags": {
+        "travel": 0.5,
+        "financial": 0.5,
+        "action_required": 0.0
+      },
+      "extract": {
+        "total": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\$[\\d,]+\\.\\d{2}"
+        },
+        "route": {
+          "source": "snippet",
+          "regex": "(?:from|pickup)[:\\s]+([A-Za-z0-9 ,]{3,50}?)\\s+(?:to|\u2192|->)\\s+([A-Za-z0-9 ,]{3,50})"
+        },
+        "date": {
+          "source": "snippet",
+          "regex": "\\b(\\d{1,2}/\\d{1,2}/\\d{2,4}|[A-Za-z]+ \\d+,?\\s*\\d{4})\\b"
+        },
+        "duration": {
+          "source": "snippet",
+          "regex": "(\\d+ min(?:ute)?s?)"
+        }
+      }
+    },
+    {
+      "id": "seesaw-notification",
+      "name": "Seesaw School Notification",
+      "priority": 108,
+      "type": "school_notification",
+      "detect": {
+        "sender_contains": "seesaw.me",
+        "subject_regex": "(?i)(seesaw|new activity|class message|teacher posted|your child|student (posted|added|shared))"
+      },
+      "tags": {
+        "kids": 0.95,
+        "action_required": 0.3,
+        "personal": 0.3
+      },
+      "extract": {
+        "student": {
+          "source": "snippet",
+          "regex": "(?:student|child|your)\\s+([A-Za-z]+ [A-Za-z]+)(?:\\s+posted|\\s+added|\\s+shared|'s)"
+        },
+        "teacher": {
+          "source": "snippet",
+          "regex": "(?:teacher|from)\\s+([A-Za-z .]{3,30})\\s+(?:posted|sent|added)"
+        },
+        "class": {
+          "source": "snippet",
+          "regex": "(?:class|classroom|in)\\s+([A-Za-z0-9 \\-]{3,40})"
+        },
+        "activity_hint": {
+          "source": "snippet",
+          "max_chars": 80
+        }
+      }
+    },
+    {
+      "id": "classdojo-notification",
+      "name": "ClassDojo School Notification",
+      "priority": 108,
+      "type": "school_notification",
+      "detect": {
+        "sender_contains": "classdojo.com",
+        "subject_regex": "(?i)(classdojo|class dojo|dojo|teacher message|new story|class story|behavior update|points? (earned|awarded|added))"
+      },
+      "tags": {
+        "kids": 0.95,
+        "action_required": 0.3,
+        "personal": 0.3
+      },
+      "extract": {
+        "student": {
+          "source": "snippet",
+          "regex": "([A-Za-z]+)(?:'s| has) (?:earned|received|been awarded)"
+        },
+        "points": {
+          "source": "snippet",
+          "regex": "(\\d+) (?:point|dojo point)"
+        },
+        "teacher": {
+          "source": "snippet",
+          "regex": "(?:from|by)\\s+([A-Za-z .]{3,30})"
+        },
+        "message_hint": {
+          "source": "snippet",
+          "max_chars": 80
+        }
+      }
+    },
+    {
+      "id": "remind-notification",
+      "name": "Remind School Messaging",
+      "priority": 108,
+      "type": "school_notification",
+      "detect": {
+        "sender_contains": "remind.com",
+        "subject_regex": "(?i)(remind|new message|class message|from your (teacher|class|school))"
+      },
+      "tags": {
+        "kids": 0.9,
+        "action_required": 0.4,
+        "personal": 0.4
+      },
+      "extract": {
+        "sender_name": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:from|message from)\\s+([A-Za-z .]{3,40})"
+        },
+        "class": {
+          "source": "snippet",
+          "regex": "(?:class|group|in)\\s+([A-Za-z0-9 \\-]{3,40})"
+        },
+        "message_hint": {
+          "source": "snippet",
+          "max_chars": 100
+        }
+      }
+    },
+    {
+      "id": "powerschool-notification",
+      "name": "PowerSchool / School Portal Notification",
+      "priority": 105,
+      "type": "school_notification",
+      "detect": {
+        "sender_contains": "powerschool.com",
+        "subject_regex": "(?i)(powerschool|schoology|canvas|grade (update|alert|report)|attendance|report card|progress report|assignment (due|graded|missing)|parent (notification|alert))"
+      },
+      "tags": {
+        "kids": 0.95,
+        "action_required": 0.5
+      },
+      "extract": {
+        "notification_type": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)grade (update|alert)|graded": "grade_update",
+            "(?i)attendance|absent|tardy": "attendance",
+            "(?i)report card": "report_card",
+            "(?i)assignment (due|missing)": "assignment_alert",
+            "(?i)progress report": "progress_report"
+          }
+        },
+        "student": {
+          "source": "snippet",
+          "regex": "(?:student|for)\\s+([A-Za-z]+ [A-Za-z]+)"
+        },
+        "course": {
+          "source": "snippet",
+          "regex": "(?:course|class|subject)[:\\s]+([A-Za-z0-9 \\-]{3,40})"
+        },
+        "grade": {
+          "source": "snippet",
+          "regex": "(?:grade|score|earned)[:\\s]+([A-F][+\\-]?|\\d{1,3}%)"
+        }
+      }
+    },
+    {
+      "id": "parentsquare-notification",
+      "name": "ParentSquare School Notification",
+      "priority": 108,
+      "type": "school_notification",
+      "detect": {
+        "sender_contains": "parentsquare.com",
+        "subject_regex": "(?i)(parentsquare|parent square|school (message|notification|alert|announcement)|from (your school|the school|principal|teacher))"
+      },
+      "tags": {
+        "kids": 0.9,
+        "action_required": 0.4
+      },
+      "extract": {
+        "sender_name": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:from|by|sent by)\\s+([A-Za-z .]{3,40})"
+        },
+        "school": {
+          "source": "snippet",
+          "regex": "([A-Za-z0-9 '\\-]{5,50}?\\s+(?:school|elementary|middle|high|academy))"
+        },
+        "message_hint": {
+          "source": "snippet",
+          "max_chars": 100
+        }
+      }
+    },
+    {
+      "id": "teamsnap-notification",
+      "name": "TeamSnap Sports Notification",
+      "priority": 108,
+      "type": "sports_notification",
+      "detect": {
+        "sender_contains": "teamsnap.com",
+        "subject_regex": "(?i)(teamsnap|game (reminder|scheduled|canceled|rescheduled|update)|practice (reminder|scheduled|canceled)|schedule (update|change)|team (update|message|notification|announcement))"
+      },
+      "tags": {
+        "kids": 0.9,
+        "action_required": 0.5
+      },
+      "extract": {
+        "event_type": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)\\bgame\\b": "game",
+            "(?i)practice": "practice",
+            "(?i)tournament": "tournament",
+            "(?i)canceled|cancelled": "canceled",
+            "(?i)rescheduled": "rescheduled"
+          }
+        },
+        "team_name": {
+          "source": "snippet",
+          "regex": "(?:team|for)[:\\s]+([A-Za-z0-9 \\-']{3,40}?)(?:\\s+has|\\s+is|\\s+game|,|\\.)"
+        },
+        "event_date": {
+          "source": "snippet",
+          "regex": "\\b([A-Za-z]+,?\\s+[A-Za-z]+ \\d+|\\d{1,2}/\\d{1,2}/\\d{2,4})\\b"
+        },
+        "event_time": {
+          "source": "snippet",
+          "regex": "\\b(\\d{1,2}:\\d{2}\\s*(?:AM|PM|am|pm))\\b"
+        },
+        "location": {
+          "source": "snippet",
+          "regex": "(?:at|location|field|venue)[:\\s]+([A-Za-z0-9 ,\\-']{3,60}?)(?:\\n|,\\s*[A-Z]{2}|\\.)"
+        }
+      }
+    },
+    {
+      "id": "playmetrics-notification",
+      "name": "PlayMetrics Sports Notification",
+      "priority": 108,
+      "type": "sports_notification",
+      "detect": {
+        "sender_contains": "playmetrics.com",
+        "subject_regex": "(?i)(playmetrics|game (reminder|scheduled|update)|practice (reminder|scheduled|update)|schedule|team|event (reminder|update))"
+      },
+      "tags": {
+        "kids": 0.9,
+        "action_required": 0.5
+      },
+      "extract": {
+        "event_type": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)\\bgame\\b": "game",
+            "(?i)practice": "practice",
+            "(?i)tournament": "tournament",
+            "(?i)canceled|cancelled": "canceled"
+          }
+        },
+        "team_name": {
+          "source": "snippet",
+          "regex": "(?:team|for)[:\\s]+([A-Za-z0-9 \\-']{3,40}?)(?:\\s+has|\\s+is|,|\\.)"
+        },
+        "event_date": {
+          "source": "snippet",
+          "regex": "\\b([A-Za-z]+,?\\s+[A-Za-z]+ \\d+|\\d{1,2}/\\d{1,2}/\\d{2,4})\\b"
+        },
+        "event_time": {
+          "source": "snippet",
+          "regex": "\\b(\\d{1,2}:\\d{2}\\s*(?:AM|PM|am|pm))\\b"
+        },
+        "location": {
+          "source": "snippet",
+          "regex": "(?:at|location|field|venue)[:\\s]+([A-Za-z0-9 ,\\-']{3,60}?)(?:\\n|,\\s*[A-Z]{2}|\\.)"
+        }
+      }
+    },
+    {
+      "id": "generic-school-notification",
+      "name": "Generic School Notification",
+      "priority": 65,
+      "type": "school_notification",
+      "detect": {
+        "subject_regex": "(?i)(from (your )?school|school (announcement|newsletter|alert|notice|update|message)|principal (message|update|newsletter)|parent (notification|alert|update|newsletter)|permission slip|field trip|dismissal (change|update|notice)|report card|progress report)"
+      },
+      "tags": {
+        "kids": 0.85,
+        "action_required": 0.4
+      },
+      "extract": {
+        "notification_type": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)permission slip": "permission_slip",
+            "(?i)field trip": "field_trip",
+            "(?i)report card|progress report": "report_card",
+            "(?i)dismissal": "dismissal_change",
+            "(?i)newsletter|announcement": "newsletter",
+            "(?i)alert|notice|urgent": "alert"
+          }
+        },
+        "school": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "([A-Za-z0-9 '\\-]{5,50}?\\s+(?:school|elementary|middle|high|academy))"
+        },
+        "message_hint": {
+          "source": "snippet",
+          "max_chars": 100
+        }
+      }
+    },
+    {
+      "id": "github-security-alert",
+      "name": "GitHub Security / Dependabot Alert",
+      "priority": 108,
+      "type": "security_alert",
+      "detect": {
+        "sender_domain": "github.com",
+        "subject_regex": "(?i)(security (alert|advisory|vulnerability)|dependabot|potential security|vulnerable (dependency|package)|CVE-|security update)"
+      },
+      "tags": {
+        "job": 0.5,
+        "action_required": 0.8
+      },
+      "extract": {
+        "repo": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "([a-zA-Z0-9_\\-]+/[a-zA-Z0-9_\\-]+)"
+        },
+        "severity": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)critical": "critical",
+            "(?i)high": "high",
+            "(?i)medium|moderate": "medium",
+            "(?i)low": "low"
+          }
+        },
+        "cve": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(CVE-\\d{4}-\\d+)"
+        },
+        "package": {
+          "source": "snippet",
+          "regex": "(?:package|dependency)[:\\s]+([a-zA-Z0-9_\\-@/]{2,40})"
+        }
+      }
+    },
+    {
+      "id": "github-release",
+      "name": "GitHub Release / Tag Notification",
+      "priority": 100,
+      "type": "social",
+      "detect": {
+        "sender_domain": "github.com",
+        "subject_regex": "(?i)(new release|published a new release|tagged|\\bv\\d+\\.\\d+|release notes)"
+      },
+      "tags": {
+        "job": 0.5,
+        "social": 0.4,
+        "newsletter": 0.3
+      },
+      "extract": {
+        "repo": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "([a-zA-Z0-9_\\-]+/[a-zA-Z0-9_\\-]+)"
+        },
+        "version": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\b(v?\\d+\\.\\d+(?:\\.\\d+)?)\\b"
+        },
+        "release_title": {
+          "source": "subject",
+          "max_chars": 80
+        }
+      }
+    },
+    {
+      "id": "linkedin-notification",
+      "name": "LinkedIn Notification",
+      "priority": 105,
+      "type": "social",
+      "detect": {
+        "sender_contains": "linkedin.com",
+        "subject_regex": "(?i)(connection (request|accepted)|message|inmail|who viewed|job (alert|match|recommendation)|new opportunity|people you may know|congratulate|profile view|endorsement)"
+      },
+      "tags": {
+        "social": 0.7,
+        "job": 0.5,
+        "action_required": 0.3
+      },
+      "extract": {
+        "notification_type": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)connection request|wants to connect": "connection_request",
+            "(?i)connection accepted|connected with": "connection_accepted",
+            "(?i)inmail|sent you a message|messaged you": "message",
+            "(?i)viewed your profile|who viewed": "profile_view",
+            "(?i)job (alert|match|recommendation)|new opportunity": "job_alert",
+            "(?i)endorsed you|skill endorsement": "endorsement",
+            "(?i)congratulate|new job|work anniversary": "milestone"
+          }
+        },
+        "person": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "([A-Z][a-z]+ [A-Z][a-z]+)(?:\\s+(?:wants|sent|viewed|accepted|endorsed|congratulate))"
+        },
+        "job_title": {
+          "source": "snippet",
+          "regex": "(?:at|title|position)[:\\s]+([A-Za-z ,]{3,50}?)(?:\\n|,)"
+        }
+      }
+    },
+    {
+      "id": "facebook-notification",
+      "name": "Facebook / Instagram Notification",
+      "priority": 100,
+      "type": "social",
+      "detect": {
+        "sender_contains": "facebook.com",
+        "subject_regex": "(?i)(facebook|instagram|meta|comment(ed)?|mention(ed)?|tagged|friend request|message|reaction|liked|story|post|new follower|started following)"
+      },
+      "tags": {
+        "social": 0.85,
+        "action_required": 0.2,
+        "marketing": 0.1
+      },
+      "extract": {
+        "notification_type": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)friend request": "friend_request",
+            "(?i)commented|left a comment": "comment",
+            "(?i)mentioned you|tagged you": "mention",
+            "(?i)liked your|reacted to": "reaction",
+            "(?i)message|messenger": "message",
+            "(?i)following|new follower": "new_follower"
+          }
+        },
+        "person": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "([A-Z][a-z]+ [A-Z][a-z]+)(?:\\s+(?:commented|mentioned|liked|reacted|sent|tagged))"
+        }
+      }
+    },
+    {
+      "id": "twitter-notification",
+      "name": "Twitter / X Notification",
+      "priority": 100,
+      "type": "social",
+      "detect": {
+        "sender_contains": "twitter.com",
+        "subject_regex": "(?i)(twitter|\\bX\\b|tweet|retweet|liked|mention(ed)?|followed|direct message|DM|new notification)"
+      },
+      "tags": {
+        "social": 0.85,
+        "action_required": 0.2
+      },
+      "extract": {
+        "notification_type": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)liked your|liked a tweet": "like",
+            "(?i)retweeted|reposted": "retweet",
+            "(?i)mentioned you|mentioned in": "mention",
+            "(?i)followed you|new follower": "new_follower",
+            "(?i)direct message|DM": "direct_message",
+            "(?i)replied to": "reply"
+          }
+        },
+        "person": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "([A-Z@][a-zA-Z0-9_]{1,50})(?:\\s+(?:liked|retweeted|mentioned|followed|replied))"
+        }
+      }
+    },
+    {
+      "id": "reddit-notification",
+      "name": "Reddit Notification",
+      "priority": 100,
+      "type": "social",
+      "detect": {
+        "sender_contains": "reddit.com",
+        "subject_regex": "(?i)(reddit|upvote|comment|reply|message|mention|inbox|award|subreddit)"
+      },
+      "tags": {
+        "social": 0.8,
+        "newsletter": 0.2,
+        "action_required": 0.2
+      },
+      "extract": {
+        "notification_type": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)upvoted|upvote": "upvote",
+            "(?i)commented|new comment|reply": "comment",
+            "(?i)message|private message": "message",
+            "(?i)mentioned|username mention": "mention",
+            "(?i)award": "award"
+          }
+        },
+        "subreddit": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:r/|subreddit)([A-Za-z0-9_]{2,30})"
+        }
+      }
+    },
+    {
+      "id": "nextdoor-notification",
+      "name": "Nextdoor Notification",
+      "priority": 100,
+      "type": "social",
+      "detect": {
+        "sender_contains": "nextdoor.com",
+        "subject_regex": "(?i)(nextdoor|neighbor(hood)?|local (post|news|alert|message)|your neighborhood|safety alert|recommendation)"
+      },
+      "tags": {
+        "social": 0.75,
+        "newsletter": 0.4,
+        "action_required": 0.1
+      },
+      "extract": {
+        "notification_type": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)safety alert|urgent": "safety_alert",
+            "(?i)recommendation|recommend": "recommendation",
+            "(?i)for sale|lost (pet|dog|cat)|found (pet|dog|cat)": "local_post",
+            "(?i)digest|nearby|neighborhood news": "digest"
+          }
+        },
+        "neighborhood": {
+          "source": "snippet",
+          "regex": "(?:in|from|your)\\s+([A-Za-z0-9 '\\-]{3,40}?)(?:\\s+neighborhood|\\s+area|,)"
+        }
+      }
+    },
+    {
+      "id": "indeed-job-alert",
+      "name": "Indeed Job Alert / Application Update",
+      "priority": 108,
+      "type": "job",
+      "detect": {
+        "sender_contains": "indeed.com",
+        "subject_regex": "(?i)(job alert|new jobs?|application (update|status|received|viewed)|interview|your resume|jobs? matching|apply now|job match)"
+      },
+      "tags": {
+        "job": 0.9,
+        "action_required": 0.4
+      },
+      "extract": {
+        "notification_type": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)application (update|status|moved|decision)": "application_update",
+            "(?i)interview": "interview",
+            "(?i)job alert|new jobs?|jobs? matching": "job_alert",
+            "(?i)resume (viewed|downloaded)": "resume_viewed"
+          }
+        },
+        "job_title": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:for|position|role|as a?n?)\\s+([A-Za-z &\\-]{3,50}?)(?:\\s+at|\\s+in|,|\\.)"
+        },
+        "company": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:at|with|from|company)\\s+([A-Za-z0-9 &,\\-']{3,50}?)(?:\\s+is|\\s+has|,|\\.)"
+        },
+        "location": {
+          "source": "snippet",
+          "regex": "(?:in|location)[:\\s]+([A-Za-z,\\s]{3,40}?)(?:\\n|,\\s*[A-Z]{2}|\\.)"
+        }
+      }
+    },
+    {
+      "id": "glassdoor-notification",
+      "name": "Glassdoor Job Alert",
+      "priority": 108,
+      "type": "job",
+      "detect": {
+        "sender_contains": "glassdoor.com",
+        "subject_regex": "(?i)(job alert|new jobs?|application|company review|salary|interview questions?|job match)"
+      },
+      "tags": {
+        "job": 0.9,
+        "action_required": 0.3
+      },
+      "extract": {
+        "notification_type": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)job alert|new jobs?": "job_alert",
+            "(?i)application": "application_update",
+            "(?i)review|company review": "review",
+            "(?i)salary": "salary_insight"
+          }
+        },
+        "job_title": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:for|position|as a?n?)\\s+([A-Za-z &\\-]{3,50}?)(?:\\s+at|\\s+in|,)"
+        },
+        "company": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:at|with|from)\\s+([A-Za-z0-9 &,\\-']{3,50}?)(?:\\s+is|\\s+has|,|\\.)"
+        }
+      }
+    },
+    {
+      "id": "ziprecruiter-notification",
+      "name": "ZipRecruiter Job Alert",
+      "priority": 108,
+      "type": "job",
+      "detect": {
+        "sender_contains": "ziprecruiter.com",
+        "subject_regex": "(?i)(job alert|new jobs?|applied|application|matches|your profile|employer (viewed|invited))"
+      },
+      "tags": {
+        "job": 0.9,
+        "action_required": 0.4
+      },
+      "extract": {
+        "notification_type": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)job alert|new jobs?|matches": "job_alert",
+            "(?i)applied|application": "application",
+            "(?i)employer (viewed|invited|interested)": "employer_interest"
+          }
+        },
+        "job_title": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:for|position|as a?n?)\\s+([A-Za-z &\\-]{3,50}?)(?:\\s+at|\\s+in|,)"
+        },
+        "company": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:at|with|from)\\s+([A-Za-z0-9 &,\\-']{3,50}?)(?:\\s+is|\\s+has|,|\\.)"
+        }
+      }
+    },
+    {
+      "id": "usajobs-notification",
+      "name": "USAJobs Federal Job Notification",
+      "priority": 110,
+      "type": "job",
+      "detect": {
+        "sender_contains": "usajobs.gov",
+        "subject_regex": "(?i)(application (update|status|received|referred|not referred|ineligible)|job alert|vacancy|federal (job|position)|announcement|application number)"
+      },
+      "tags": {
+        "job": 0.95,
+        "action_required": 0.6
+      },
+      "extract": {
+        "status": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "enum_map": {
+            "(?i)referred|best qualified": "referred",
+            "(?i)not referred|not selected": "not_referred",
+            "(?i)ineligible": "ineligible",
+            "(?i)received|submitted": "received",
+            "(?i)under review|reviewed": "under_review",
+            "(?i)interview": "interview"
+          }
+        },
+        "job_title": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:for|position|vacancy|announcement)[:\\s]+([A-Za-z ,&\\-]{3,60}?)(?:,|\\.|\\n)"
+        },
+        "announcement_number": {
+          "source": "snippet",
+          "regex": "(?:announcement|vacancy|announcement number)[:\\s#]+([A-Z0-9\\-]{5,25})"
+        }
+      }
+    },
+    {
+      "id": "generic-password-reset",
+      "name": "Generic Password Reset Request",
+      "priority": 88,
+      "type": "security",
+      "detect": {
+        "subject_regex": "(?i)(password (reset|change|changed|update)|reset your password|change your password|forgot (your )?password|(you|someone) requested a password reset)"
+      },
+      "tags": {
+        "action_required": 0.95,
+        "personal": 0.4
+      },
+      "extract": {
+        "service": {
+          "source": "from_name",
+          "max_chars": 40
+        },
+        "expiry": {
+          "source": "snippet",
+          "regex": "(?:link|token|code)\\s+(?:expires?|valid)[:\\s]+([0-9]+ (?:minute|hour|day)s?)"
+        },
+        "urgent": {
+          "static": true
+        }
+      }
+    },
+    {
+      "id": "generic-2fa-code",
+      "name": "Generic 2FA / One-Time Code",
+      "priority": 90,
+      "type": "security",
+      "detect": {
+        "subject_regex": "(?i)(verification code|one.time (code|password|passcode)|two.factor|2fa|security code|your (sign.in|login|otp) code|confirm your (identity|login|sign.in))"
+      },
+      "tags": {
+        "action_required": 0.95,
+        "personal": 0.5
+      },
+      "extract": {
+        "code": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "\\b([0-9]{4,8})\\b"
+        },
+        "service": {
+          "source": "from_name",
+          "max_chars": 40
+        },
+        "expiry": {
+          "source": "snippet",
+          "regex": "(?:expires?|valid|code)[:\\s]+(?:in\\s+)?([0-9]+ (?:minute|hour|second)s?)"
+        }
+      }
+    },
+    {
+      "id": "generic-login-alert",
+      "name": "Generic New Login / Device Alert",
+      "priority": 88,
+      "type": "security",
+      "detect": {
+        "subject_regex": "(?i)(new (sign.in|login|device|location)|sign.in from (new|unknown)|login (attempt|from|detected|alert)|someone (signed in|logged in|accessed your account)|unrecognized (device|sign.in|login|access))"
+      },
+      "tags": {
+        "action_required": 0.85,
+        "personal": 0.4
+      },
+      "extract": {
+        "service": {
+          "source": "from_name",
+          "max_chars": 40
+        },
+        "device_hint": {
+          "source": "snippet",
+          "regex": "(?:device|browser|from|on)[:\\s]+([A-Za-z0-9 ,\\-]{3,50}?)(?:\\n|\\.)"
+        },
+        "location_hint": {
+          "source": "snippet",
+          "regex": "(?:location|from|in)[:\\s]+([A-Za-z,\\s]{3,40}?)(?:\\n|\\.)"
+        }
+      }
+    },
+    {
+      "id": "generic-account-verify",
+      "name": "Generic Account Verification Email",
+      "priority": 85,
+      "type": "security",
+      "detect": {
+        "subject_regex": "(?i)(verify (your|your email|account|email address)|email verification|confirm (your|your email)|activate (your|your account)|complete (your|sign.up|registration|your account))"
+      },
+      "tags": {
+        "action_required": 0.85,
+        "personal": 0.3
+      },
+      "extract": {
+        "service": {
+          "source": "from_name",
+          "max_chars": 40
+        },
+        "verification_code": {
+          "source": "snippet",
+          "regex": "(?:code|token)[:\\s]+([A-Z0-9]{4,10})"
+        },
+        "expiry": {
+          "source": "snippet",
+          "regex": "(?:link|code)\\s+(?:expires?|valid)[:\\s]+([0-9]+ (?:minute|hour|day)s?)"
+        }
+      }
+    },
+    {
+      "id": "generic-data-breach",
+      "name": "Generic Data Breach Notification",
+      "priority": 95,
+      "type": "security",
+      "detect": {
+        "subject_regex": "(?i)(data breach|security breach|information (exposed|compromised|accessed)|your (data|personal information|account) (may have been|was|has been) (exposed|compromised|accessed|involved)|security (incident|notice)|credit monitoring)"
+      },
+      "tags": {
+        "action_required": 1.0,
+        "financial": 0.5,
+        "personal": 0.6
+      },
+      "extract": {
+        "company": {
+          "source": "from_name",
+          "max_chars": 40
+        },
+        "data_exposed": {
+          "source": "snippet",
+          "max_chars": 100
+        },
+        "date_of_breach": {
+          "source": "snippet",
+          "regex": "(?:on|occurred|discovered|breach)[:\\s]+([A-Za-z]+ \\d+,?\\s*\\d{4}|\\d{1,2}/\\d{1,2}/\\d{4})"
+        },
+        "urgent": {
+          "static": true
+        }
+      }
+    },
+    {
+      "id": "google-calendar-invite",
+      "name": "Google Calendar Invite",
+      "priority": 105,
+      "type": "calendar_invite",
+      "detect": {
+        "sender_contains": "google.com",
+        "subject_regex": "(?i)(invitation|you.re invited|calendar invite|event (invitation|update|canceled|rescheduled)|has been (invited|added))"
+      },
+      "tags": {
+        "action_required": 0.7,
+        "personal": 0.5
+      },
+      "extract": {
+        "event_name": {
+          "source": "subject",
+          "regex": "(?:invitation:|invited to|you.re invited to)[:\\s]*(.+)"
+        },
+        "date_hint": {
+          "source": "snippet",
+          "regex": "\\b([A-Za-z]+,?\\s+[A-Za-z]+ \\d+,?\\s*\\d{0,4})\\b"
+        },
+        "time_hint": {
+          "source": "snippet",
+          "regex": "\\b(\\d{1,2}:\\d{2}\\s*(?:AM|PM|am|pm))\\b"
+        },
+        "organizer": {
+          "source": "snippet",
+          "regex": "(?:organized by|organizer|from)[:\\s]+([A-Za-z .]{3,40})"
+        },
+        "location_hint": {
+          "source": "snippet",
+          "max_chars": 80
+        }
+      }
+    },
+    {
+      "id": "zoom-meeting-invite",
+      "name": "Zoom Meeting Invitation",
+      "priority": 105,
+      "type": "calendar_invite",
+      "detect": {
+        "sender_contains": "zoom.us",
+        "subject_regex": "(?i)(zoom (meeting|webinar|invite|invitation)|joining (zoom|a zoom)|you.re invited to a? (zoom|webinar|meeting)|meeting (invitation|reminder))"
+      },
+      "tags": {
+        "action_required": 0.7,
+        "personal": 0.4
+      },
+      "extract": {
+        "meeting_id": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:meeting id|meeting)[:\\s#]+([0-9 ]{8,15})"
+        },
+        "passcode": {
+          "source": "snippet",
+          "regex": "(?:passcode|password)[:\\s]+([A-Za-z0-9]{4,12})"
+        },
+        "event_name": {
+          "source": "subject",
+          "regex": "(?:invitation:|meeting:|webinar:)\\s*(.+)"
+        },
+        "date_hint": {
+          "source": "snippet",
+          "regex": "\\b([A-Za-z]+,?\\s+[A-Za-z]+ \\d+,?\\s*\\d{0,4})\\b"
+        },
+        "time_hint": {
+          "source": "snippet",
+          "regex": "\\b(\\d{1,2}:\\d{2}\\s*(?:AM|PM|am|pm)[^\\n]{0,20})\\b"
+        }
+      }
+    },
+    {
+      "id": "teams-meeting-invite",
+      "name": "Microsoft Teams Meeting Invitation",
+      "priority": 105,
+      "type": "calendar_invite",
+      "detect": {
+        "sender_contains": "microsoft.com",
+        "subject_regex": "(?i)(microsoft teams|teams (meeting|invite|invitation|call)|you.re invited to a? (teams|meeting)|meeting (invitation|request|scheduled))"
+      },
+      "tags": {
+        "action_required": 0.7,
+        "personal": 0.4
+      },
+      "extract": {
+        "event_name": {
+          "source": "subject",
+          "regex": "(?:invitation:|meeting:)\\s*(.+)"
+        },
+        "date_hint": {
+          "source": "snippet",
+          "regex": "\\b([A-Za-z]+,?\\s+[A-Za-z]+ \\d+,?\\s*\\d{0,4})\\b"
+        },
+        "time_hint": {
+          "source": "snippet",
+          "regex": "\\b(\\d{1,2}:\\d{2}\\s*(?:AM|PM|am|pm)[^\\n]{0,20})\\b"
+        },
+        "organizer": {
+          "source": "snippet",
+          "regex": "(?:organized by|organizer|from)[:\\s]+([A-Za-z .]{3,40})"
+        }
+      }
+    },
+    {
+      "id": "calendly-booking",
+      "name": "Calendly Booking Confirmation",
+      "priority": 105,
+      "type": "calendar_invite",
+      "detect": {
+        "sender_contains": "calendly.com",
+        "subject_regex": "(?i)(calendly|(new|confirmed|upcoming) (event|booking|meeting|appointment)|you have a new (event|booking|meeting|appointment)|invitation accepted|meeting confirmed)"
+      },
+      "tags": {
+        "action_required": 0.6,
+        "personal": 0.6
+      },
+      "extract": {
+        "event_name": {
+          "source": [
+            "subject",
+            "snippet"
+          ],
+          "regex": "(?:event:|booking:|meeting:)\\s*(.+)"
+        },
+        "date_hint": {
+          "source": "snippet",
+          "regex": "\\b([A-Za-z]+,?\\s+[A-Za-z]+ \\d+,?\\s*\\d{0,4})\\b"
+        },
+        "time_hint": {
+          "source": "snippet",
+          "regex": "\\b(\\d{1,2}:\\d{2}\\s*(?:AM|PM|am|pm)[^\\n]{0,20})\\b"
+        },
+        "invitee": {
+          "source": "snippet",
+          "regex": "(?:invitee|with|booked by)[:\\s]+([A-Za-z .]{3,40})"
+        },
+        "location_hint": {
+          "source": "snippet",
+          "max_chars": 80
+        }
+      }
+    },
+    {
+      "id": "generic-newsletter",
+      "name": "Generic Newsletter / Digest",
+      "priority": 55,
+      "type": "newsletter",
+      "detect": {
+        "subject_regex": "(?i)(newsletter|digest|weekly (update|roundup|recap)|monthly (update|roundup|recap)|daily (briefing|digest|update)|morning (brief|briefing|digest)|your (weekly|monthly|daily) (update|summary|digest)|in case you missed|\\bwhat.s new\\b)"
+      },
+      "tags": {
+        "newsletter": 0.9,
+        "marketing": 0.2,
+        "action_required": 0.0
+      },
+      "extract": {
+        "sender_name": {
+          "source": "from_name",
+          "max_chars": 40
+        },
+        "edition_hint": {
+          "source": "subject",
+          "max_chars": 80
+        }
+      }
+    },
+    {
+      "id": "generic-marketing",
+      "name": "Generic Marketing / Promotional Email",
+      "priority": 50,
+      "type": "marketing",
+      "detect": {
+        "subject_regex": "(?i)(\\d+% off|up to \\d+% off|sale|flash sale|deal|limited time (offer|deal|sale)|clearance|promo(tion)?|coupon|discount|save (up to|\\d+)|shop (now|today|our)|don.t miss out|exclusive offer|members? only|new arrivals?|just dropped|back in stock|free shipping)"
+      },
+      "tags": {
+        "marketing": 0.95,
+        "newsletter": 0.2,
+        "action_required": 0.0
+      },
+      "extract": {
+        "offer_hint": {
+          "source": "subject",
+          "max_chars": 80
+        },
+        "discount": {
+          "source": "subject",
+          "regex": "(\\d+%\\s*off|\\$\\d+\\s*off)"
+        },
+        "sender_name": {
           "source": "from_name",
           "max_chars": 40
         }

@@ -15,6 +15,14 @@
         "type": "string",
         "description": "Path to SQLite DB"
       },
+      "localRulesPath": {
+        "type": "string",
+        "description": "Path to local rules overrides file (merged with bundled rules, overrides by ID). Gitignored — for personal/private rules."
+      },
+      "templatesPath": {
+        "type": "string",
+        "description": "Path to extractor_templates.json"
+      },
       "blockThreshold": {
         "type": "number",
         "default": -50

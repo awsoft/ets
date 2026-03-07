@@ -1,0 +1,78 @@
+{
+  "templates": [
+    {
+      "id": "bank-notification",
+      "name": "Bank Notification",
+      "priority": 100,
+      "type": "bank_notification",
+      "detect": {
+        "sender_domain": "mybank.com"
+      },
+      "extract": {
+        "notice_type": {"static": "bank"},
+        "amount": {"source": "snippet", "regex": "\\$([\\d,]+\\.\\d{2})"},
+        "summary": {"source": "subject", "max_chars": 20},
+        "direction": {
+          "source": "subject",
+          "enum_map": {"(?i)deposit": "inbound", "(?i)withdraw|payment": "outbound"}
+        }
+      },
+      "tags": {"financial": 0.8, "action_required": 0.5}
+    },
+    {
+      "id": "newsletter",
+      "name": "Newsletter",
+      "priority": 50,
+      "type": "newsletter",
+      "detect": {
+        "sender_contains": "newsletter@",
+        "subject_regex": "(?i)(weekly|monthly|digest)"
+      },
+      "extract": {},
+      "tags": {"newsletter": 0.9, "marketing": 0.3}
+    },
+    {
+      "id": "shipping",
+      "name": "Shipping Notification",
+      "priority": 75,
+      "type": "shipping",
+      "detect": {
+        "any": true,
+        "subject_regex": "(?i)(shipped|tracking|package|delivery)"
+      },
+      "extract": {
+        "tracking": {"source": ["subject", "snippet"], "regex": "(?i)#?([A-Z0-9]{10,30})"},
+        "carrier": {
+          "source": "snippet",
+          "enum_map": {"(?i)ups": "UPS", "(?i)fedex": "FedEx", "(?i)usps": "USPS"}
+        }
+      },
+      "tags": {"travel": 0.3, "action_required": 0.2}
+    },
+    {
+      "id": "multi-source-tmpl",
+      "name": "Multi Source Test",
+      "priority": 60,
+      "type": "test_multi",
+      "detect": {
+        "sender_domain": "multisource.com"
+      },
+      "extract": {
+        "name_field": {"source": ["from_name", "subject"], "max_chars": 50}
+      },
+      "tags": {"personal": 0.4}
+    }
+  ],
+  "tag_rules": [
+    {
+      "id": "tag-urgent",
+      "match": {"subject_regex": "(?i)(urgent|action required|immediate)"},
+      "adjust": {"action_required": 0.9, "personal": 0.3}
+    },
+    {
+      "id": "tag-investment",
+      "match": {"subject_regex": "(?i)(stock|portfolio|dividend|market)"},
+      "adjust": {"investment": 0.85, "newsletter": 0.3}
+    }
+  ]
+}
