@@ -1,6 +1,6 @@
 ![ETS — Email Token Saver](https://raw.githubusercontent.com/awsoft/ets/main/logo.png)
 
-[![version](https://img.shields.io/badge/version-1.4.0-blue)](./Cargo.toml)
+[![version](https://img.shields.io/badge/version-1.4.1-blue)](./Cargo.toml)
 [![npm](https://img.shields.io/npm/v/@awsoft/ets)](https://www.npmjs.com/package/@awsoft/ets)
 [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 
