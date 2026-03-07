@@ -535,13 +535,15 @@ The `snippet_cap` (default 300) bounds the full-policy snippet. The `short` poli
 
 ```mermaid
 flowchart LR
-    A[📬 Gmail / Yahoo\nInbox] -->|fetch headers| B[email_normalizer.py]
-    B -->|JSON array| C{ets filter}
+    A[📬 Gmail / Yahoo\nInbox] -->|fetch headers| B["external orchestrator\ne.g. email_normalizer.py"]
+    B -->|"JSON array\n[{id,from,subject,...}]"| C{ets filter}
     C -->|blocked 64%| D[🗑️ Dropped\nno body fetch]
-    C -->|passed 36%| E[Fetch Bodies\ngog thread get --json]
-    E -->|strip HTML\ncap 500 chars| F{ets extract}
-    F -->|structured JSON\n77% fewer tokens| G[🤖 LLM Context]
+    C -->|passed 36%| E["Fetch Bodies\n(orchestrator)"]
+    E -->|"enriched JSON\nw/ snippets"| F{ets extract}
+    F -->|"structured JSON\n77% fewer tokens"| G[🤖 LLM Context]
 
+    style B fill:#888,color:#fff
+    style E fill:#888,color:#fff
     style D fill:#ff6b6b,color:#fff
     style G fill:#51cf66,color:#fff
 ```
