@@ -3458,8 +3458,8 @@
       "priority": 108,
       "type": "sports_notification",
       "detect": {
-        "sender_contains": "teamsnap.com",
-        "subject_regex": "(?i)(teamsnap|game (reminder|scheduled|canceled|rescheduled|update)|practice (reminder|scheduled|canceled)|schedule (update|change)|team (update|message|notification|announcement))"
+        "sender_contains": "teamsnap",
+        "subject_regex": "(?i)(teamsnap|game (reminder|scheduled|canceled|rescheduled|update)|practice (reminder|scheduled|canceled)|schedule (update|change)|team (update|message|notification|announcement)|new (event|practice|game)|availability|rsvp)"
       },
       "tags": {
         "kids": 0.9,
@@ -4357,6 +4357,342 @@
           "source": "from_name",
           "max_chars": 40
         }
+      }
+    },
+    {
+      "id": "chickfila-receipt",
+      "name": "Chick-fil-A Receipt",
+      "priority": 105,
+      "type": "receipt",
+      "detect": {
+        "sender_contains": "chick-fil-a.com",
+        "subject_regex": "(?i)(receipt|order|mobile order)"
+      },
+      "extract": {
+        "merchant": {
+          "type": "static",
+          "value": "Chick-fil-A"
+        }
+      },
+      "tags": {
+        "financial": 0.3
+      }
+    },
+    {
+      "id": "linkedin-invitations",
+      "name": "LinkedIn Connection Invitations",
+      "priority": 105,
+      "type": "social_notification",
+      "detect": {
+        "sender_contains": "linkedin.com",
+        "subject_regex": "(?i)(invitation|connect|added you|new connection)"
+      },
+      "extract": {},
+      "tags": {
+        "social": 0.6
+      }
+    },
+    {
+      "id": "linkedin-job-alert",
+      "name": "LinkedIn Job Alert",
+      "priority": 106,
+      "type": "job_alert",
+      "detect": {
+        "sender_contains": "jobs-noreply@linkedin",
+        "subject_regex": "(?i)(new jobs|job alert|similar to|recommended)"
+      },
+      "extract": {},
+      "tags": {
+        "job": 0.9,
+        "action_required": 0.4
+      }
+    },
+    {
+      "id": "apple-purchase",
+      "name": "Apple Purchase Receipt",
+      "priority": 108,
+      "type": "receipt",
+      "detect": {
+        "sender_domain": "email.apple.com",
+        "subject_regex": "(?i)(purchase|receipt|invoice|subscription|order)"
+      },
+      "extract": {
+        "merchant": {
+          "type": "static",
+          "value": "Apple"
+        }
+      },
+      "tags": {
+        "financial": 0.5
+      }
+    },
+    {
+      "id": "apple-security",
+      "name": "Apple Account Security",
+      "priority": 109,
+      "type": "security_alert",
+      "detect": {
+        "sender_domain": "email.apple.com",
+        "subject_regex": "(?i)(password|app.specific|two.factor|verification|sign.in|security)"
+      },
+      "extract": {},
+      "tags": {
+        "action_required": 0.8,
+        "personal": 0.7
+      }
+    },
+    {
+      "id": "faasafety-course",
+      "name": "FAASafety Course/Webinar",
+      "priority": 100,
+      "type": "aviation_training",
+      "detect": {
+        "sender_contains": "faasafety.gov"
+      },
+      "extract": {
+        "course_id": {
+          "type": "regex",
+          "source": "subject",
+          "regex": "\\[([A-Z]{2}\\d{8,})\\]",
+          "group": 1
+        },
+        "title": {
+          "type": "regex",
+          "source": "subject",
+          "regex": "\\]\\s*(.+?)\\s*-\\s*FAASafety",
+          "group": 1
+        }
+      },
+      "tags": {
+        "personal": 0.5
+      }
+    },
+    {
+      "id": "airbnb-reservation",
+      "name": "Airbnb Reservation",
+      "priority": 108,
+      "type": "travel_booking",
+      "detect": {
+        "sender_contains": "airbnb.com",
+        "subject_regex": "(?i)(reservation|booking|check.in|itinerary|stay|upcoming trip)"
+      },
+      "extract": {
+        "date_hint": {
+          "type": "regex",
+          "source": "subject",
+          "regex": "(?i)(\\w+ \\d{1,2},? \\d{4})",
+          "group": 1
+        }
+      },
+      "tags": {
+        "travel": 0.9,
+        "action_required": 0.5
+      }
+    },
+    {
+      "id": "playmetrics-game",
+      "name": "PlayMetrics Game/Event",
+      "priority": 108,
+      "type": "sports_notification",
+      "detect": {
+        "sender_contains": "playmetrics.com"
+      },
+      "extract": {
+        "event_type": {
+          "type": "enum_map",
+          "source": "subject",
+          "map": {
+            "(?i)new game": "new_game",
+            "(?i)game update": "game_update",
+            "(?i)notification": "notification",
+            "(?i)practice": "practice",
+            "(?i)canceled": "canceled"
+          }
+        }
+      },
+      "tags": {
+        "kids": 0.9,
+        "action_required": 0.5
+      }
+    },
+    {
+      "id": "indian-creek-newsletter",
+      "name": "Indian Creek School Newsletter",
+      "priority": 106,
+      "type": "school_newsletter",
+      "detect": {
+        "sender_domain": "indiancreekschool.org",
+        "subject_regex": "(?i)(newsletter|this week|creek|grade|health notice|families)"
+      },
+      "extract": {
+        "sender_name": {
+          "type": "regex",
+          "source": "from_name",
+          "regex": "(.+)",
+          "group": 1
+        }
+      },
+      "tags": {
+        "kids": 0.85,
+        "action_required": 0.3
+      }
+    },
+    {
+      "id": "mufc-direct",
+      "name": "Maryland United FC Direct",
+      "priority": 106,
+      "type": "sports_notification",
+      "detect": {
+        "sender_domain": "mdunitedfc.org"
+      },
+      "extract": {},
+      "tags": {
+        "kids": 0.8,
+        "action_required": 0.3
+      }
+    },
+    {
+      "id": "edp-soccer",
+      "name": "EDP Soccer",
+      "priority": 105,
+      "type": "sports_notification",
+      "detect": {
+        "sender_contains": "edpsoccer.com"
+      },
+      "extract": {},
+      "tags": {
+        "kids": 0.7,
+        "action_required": 0.3
+      }
+    },
+    {
+      "id": "alpaca-notification",
+      "name": "Alpaca Markets",
+      "priority": 100,
+      "type": "financial_notification",
+      "detect": {
+        "sender_contains": "alpaca.markets"
+      },
+      "extract": {},
+      "tags": {
+        "financial": 0.6,
+        "action_required": 0.3
+      }
+    },
+    {
+      "id": "schwab-notification",
+      "name": "Charles Schwab",
+      "priority": 106,
+      "type": "financial_notification",
+      "detect": {
+        "sender_contains": "schwab"
+      },
+      "extract": {},
+      "tags": {
+        "financial": 0.7,
+        "investment": 0.8
+      }
+    },
+    {
+      "id": "msysa-notification",
+      "name": "MD State Youth Soccer",
+      "priority": 105,
+      "type": "sports_notification",
+      "detect": {
+        "sender_contains": "msysa.org"
+      },
+      "extract": {},
+      "tags": {
+        "kids": 0.8,
+        "action_required": 0.3
+      }
+    },
+    {
+      "id": "south-river-athletics",
+      "name": "South River Youth Athletics",
+      "priority": 105,
+      "type": "sports_notification",
+      "detect": {
+        "sender_contains": "south river"
+      },
+      "extract": {},
+      "tags": {
+        "kids": 0.8,
+        "action_required": 0.3
+      }
+    },
+    {
+      "id": "enterprise-rental-confirm",
+      "name": "Enterprise Rental Confirmation",
+      "priority": 108,
+      "type": "travel_booking",
+      "detect": {
+        "sender_contains": "enterprise.com",
+        "subject_regex": "(?i)(confirmed|reservation|rental|receipt|return)"
+      },
+      "extract": {},
+      "tags": {
+        "travel": 0.9,
+        "action_required": 0.5
+      }
+    },
+    {
+      "id": "venmo-payment",
+      "name": "Venmo Payment",
+      "priority": 108,
+      "type": "financial_notification",
+      "detect": {
+        "sender_contains": "venmo.com",
+        "subject_regex": "(?i)(paid you|you paid|completed|request|charge)"
+      },
+      "extract": {},
+      "tags": {
+        "financial": 0.8,
+        "action_required": 0.5
+      }
+    },
+    {
+      "id": "apple-card-payment",
+      "name": "Apple Card Payment",
+      "priority": 109,
+      "type": "financial_notification",
+      "detect": {
+        "sender_contains": "applecard",
+        "subject_regex": "(?i)(payment|statement|due|balance)"
+      },
+      "extract": {},
+      "tags": {
+        "financial": 0.8,
+        "action_required": 0.4
+      }
+    },
+    {
+      "id": "aircraft-insurance",
+      "name": "Aircraft Insurance",
+      "priority": 108,
+      "type": "financial_notification",
+      "detect": {
+        "sender_contains": "assuredpartners"
+      },
+      "extract": {},
+      "tags": {
+        "financial": 0.9,
+        "action_required": 0.8,
+        "personal": 0.6
+      }
+    },
+    {
+      "id": "linkedin-dm",
+      "name": "LinkedIn Direct Message",
+      "priority": 107,
+      "type": "social_notification",
+      "detect": {
+        "sender_contains": "messages-noreply@linkedin"
+      },
+      "extract": {},
+      "tags": {
+        "social": 0.7,
+        "action_required": 0.5
       }
     }
   ]
