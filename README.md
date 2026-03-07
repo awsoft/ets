@@ -531,6 +531,23 @@ The `snippet_cap` (default 300) bounds the full-policy snippet. The `short` poli
 
 ---
 
+## Pipeline Flow
+
+```mermaid
+flowchart LR
+    A[📬 Gmail / Yahoo\nInbox] -->|fetch headers| B[email_normalizer.py]
+    B -->|JSON array| C{ets filter}
+    C -->|blocked 64%| D[🗑️ Dropped\nno body fetch]
+    C -->|passed 36%| E[Fetch Bodies\ngog thread get --json]
+    E -->|strip HTML\ncap 500 chars| F{ets extract}
+    F -->|structured JSON\n77% fewer tokens| G[🤖 LLM Context]
+
+    style D fill:#ff6b6b,color:#fff
+    style G fill:#51cf66,color:#fff
+```
+
+---
+
 ## Token Reduction
 
 Token savings come from two independent sources:
@@ -555,6 +572,16 @@ raw tokens × (1 - 0.42 filter) × (1 - 0.35 extract) ≈ raw tokens × 0.37
 ```
 
 Real-world overhead is slightly higher because uncertain emails still get bodies fetched. Actual measured reduction: **77.4%**.
+
+```mermaid
+flowchart LR
+    A["📨 Raw inbox\n38,815 tokens\n200 emails"] -->|"Filter  −42%"| B["🔍 Survivors\n~22,512 tokens\n72 emails"]
+    B -->|"Extract  −35%"| C["✅ LLM input\n8,844 tokens\n72 emails"]
+
+    style A fill:#e03131,color:#fff
+    style B fill:#e67700,color:#fff
+    style C fill:#2f9e44,color:#fff
+```
 
 ---
 
