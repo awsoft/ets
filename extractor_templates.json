@@ -58,7 +58,7 @@
     {
       "id": "tag-kids-school",
       "match": {
-        "subject_regex": "(?i)(school|grade|class|student|parent|permission|field trip|pickup|dismissal|lunch|yearbook|pta|teacher|homework)"
+        "subject_regex": "(?i)(\\bschool\\b|grade \\d|class (message|update|assignment|newsletter)|student|parent.?(teacher|conference)|permission slip|field trip|pickup|dismissal|lunch menu|yearbook|pta|homework|report card)"
       },
       "adjust": {
         "kids": 0.85,
@@ -69,7 +69,7 @@
     {
       "id": "tag-kids-sports",
       "match": {
-        "subject_regex": "(?i)(game|practice|tournament|schedule|team|coach|player|registration|tryout|match|kickoff|lineup)"
+        "subject_regex": "(?i)(game (reminder|scheduled|canceled|rescheduled|update|day|time)|practice (reminder|scheduled|canceled)|tournament|team (update|message|roster|schedule)|coach|player|tryout|kickoff|lineup|\\bgame\\b.*\\bvs\\b)"
       },
       "adjust": {
         "kids": 0.7,
@@ -329,7 +329,7 @@
     {
       "id": "tag-utility-bill",
       "match": {
-        "subject_regex": "(?i)(electric|gas|water|utility|energy|power company|public service|national grid|pg&e|con ?ed|duke energy)"
+        "subject_regex": "(?i)((electric|gas|water|utility|energy) (bill|statement|payment|due|balance)|power company.*(bill|due)|national grid|pg&e|con ?ed|duke energy)"
       },
       "adjust": {
         "financial": 0.7,
@@ -2199,7 +2199,7 @@
       "priority": 70,
       "type": "billing",
       "detect": {
-        "subject_regex": "(?i)(electric|gas|water|utility|energy|power company|your (electric|gas|water|utility) (bill|statement) (is|has)|utility (bill|statement|payment))"
+        "subject_regex": "(?i)(\\belectric\\b|\\bgas bill\\b|\\bwater bill\\b|\\butility\\b|power company|your (electric|gas|water|utility) (bill|statement) (is|has)|utility (bill|statement|payment))"
       },
       "tags": {
         "financial": 0.7,
@@ -2229,7 +2229,7 @@
       "priority": 68,
       "type": "billing",
       "detect": {
-        "subject_regex": "(?i)(insurance (premium|payment|bill|statement|invoice|renewal)|your (policy|premium) (is due|renewal|statement)|auto|home|health|life|renters insurance)"
+        "subject_regex": "(?i)(insurance (premium|payment|bill|statement|invoice|renewal)|your (policy|premium) (is due|renewal|statement)|(auto|home|health|life|renters) insurance)"
       },
       "tags": {
         "financial": 0.8,
