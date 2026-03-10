@@ -4516,42 +4516,6 @@
       }
     },
     {
-      "id": "indian-creek-newsletter",
-      "name": "Indian Creek School Newsletter",
-      "priority": 106,
-      "type": "school_newsletter",
-      "detect": {
-        "sender_domain": "indiancreekschool.org",
-        "subject_regex": "(?i)(newsletter|this week|creek|grade|health notice|families)"
-      },
-      "extract": {
-        "sender_name": {
-          "type": "regex",
-          "source": "from_name",
-          "regex": "(.+)",
-          "group": 1
-        }
-      },
-      "tags": {
-        "kids": 0.85,
-        "action_required": 0.3
-      }
-    },
-    {
-      "id": "mufc-direct",
-      "name": "Maryland United FC Direct",
-      "priority": 106,
-      "type": "sports_notification",
-      "detect": {
-        "sender_domain": "mdunitedfc.org"
-      },
-      "extract": {},
-      "tags": {
-        "kids": 0.8,
-        "action_required": 0.3
-      }
-    },
-    {
       "id": "edp-soccer",
       "name": "EDP Soccer",
       "priority": 105,
@@ -4562,20 +4526,6 @@
       "extract": {},
       "tags": {
         "kids": 0.7,
-        "action_required": 0.3
-      }
-    },
-    {
-      "id": "alpaca-notification",
-      "name": "Alpaca Markets",
-      "priority": 100,
-      "type": "financial_notification",
-      "detect": {
-        "sender_contains": "alpaca.markets"
-      },
-      "extract": {},
-      "tags": {
-        "financial": 0.6,
         "action_required": 0.3
       }
     },
@@ -4591,20 +4541,6 @@
       "tags": {
         "financial": 0.7,
         "investment": 0.8
-      }
-    },
-    {
-      "id": "msysa-notification",
-      "name": "MD State Youth Soccer",
-      "priority": 105,
-      "type": "sports_notification",
-      "detect": {
-        "sender_contains": "msysa.org"
-      },
-      "extract": {},
-      "tags": {
-        "kids": 0.8,
-        "action_required": 0.3
       }
     },
     {
